@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0B1D35"/>
+      <stop offset="100%" style="stop-color:#1E3A5F"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0EA5E9"/>
+      <stop offset="50%" style="stop-color:#38BDF8"/>
+      <stop offset="100%" style="stop-color:#06B6D4"/>
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#D4A574"/>
+      <stop offset="100%" style="stop-color:#E8C5A0"/>
+    </linearGradient>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="60" cy="60" r="56" fill="url(#bgGrad)" stroke="url(#accentGrad)" stroke-width="2"/>
+  <!-- Globe lines -->
+  <ellipse cx="60" cy="60" rx="28" ry="28" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"/>
+  <ellipse cx="60" cy="60" rx="16" ry="28" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1.2"/>
+  <line x1="32" y1="60" x2="88" y2="60" stroke="rgba(255,255,255,0.1)" stroke-width="1.2"/>
+  <line x1="60" y1="32" x2="60" y2="88" stroke="rgba(255,255,255,0.1)" stroke-width="1.2"/>
+  <!-- Plane -->
+  <g transform="translate(60,52) rotate(-25)">
+    <path d="M-16,2 L-6,-3 L0,-1 L12,-8 L14,-6 L4,0 L8,4 L6,6 L2,4 L-2,4 L-6,8 L-8,6 L-4,2 L-14,6 Z"
+          fill="url(#accentGrad)" opacity="0.95"/>
+  </g>
+  <!-- Curved path (travel arc) -->
+  <path d="M30,72 Q60,40 90,72" fill="none" stroke="url(#goldGrad)" stroke-width="2" stroke-dasharray="4,3" opacity="0.7"/>
+  <!-- BT text -->
+  <text x="60" y="86" text-anchor="middle" font-family="Georgia, serif" font-weight="700" font-size="18" fill="white" letter-spacing="3">BT</text>
+</svg>
