@@ -234,6 +234,30 @@ db.exec(`
   );
 `);
 
+// Run migrations for document_folders and folder_id column in document_templates
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS document_folders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+  
+  const columns = db.pragma("table_info(document_templates)");
+  const hasFolderId = columns.some(c => c.name === 'folder_id');
+  if (!hasFolderId) {
+    db.exec(`
+      ALTER TABLE document_templates 
+      ADD COLUMN folder_id INTEGER REFERENCES document_folders(id) ON DELETE SET NULL;
+    `);
+    console.log("Migration: Added folder_id to document_templates successfully.");
+  }
+} catch (e) {
+  console.error("Migration error for document_folders / folder_id:", e);
+}
+
+
 // Seed flight_rates if empty
 try {
   const count = db.prepare("SELECT COUNT(*) as count FROM flight_rates").get().count;

@@ -430,7 +430,13 @@ export default function AdminPage() {
   const [docTemplates, setDocTemplates] = useState([]);
   const [templateModal, setTemplateModal] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState(null);
-  const [templateForm, setTemplateForm] = useState({ service_type:'visa', country:'', name:'', description:'', required:1 });
+  const [templateForm, setTemplateForm] = useState({ service_type:'visa', country:'', name:'', description:'', required:1, folder_id:'' });
+  const [customFolders, setCustomFolders] = useState([]);
+  const [customFolderModal, setCustomFolderModal] = useState(false);
+  const [editingCustomFolder, setEditingCustomFolder] = useState(null);
+  const [customFolderForm, setCustomFolderForm] = useState({ name: '' });
+  const [selectedCustomFolder, setSelectedCustomFolder] = useState(null);
+  const [docSubTab, setDocSubTab] = useState('system');
   
   const [custModal, setCustModal] = useState(false);
   const [editingCust, setEditingCust] = useState(null);
@@ -451,7 +457,7 @@ export default function AdminPage() {
   const loadAllData = useCallback(async () => {
     try {
       setLoading(true);
-      const [dashData, bkData, vsData, custData, inqData, pkgData, blogData, flData, subData, convData, ctryData, stfData, settData, templData, ratesData] = await Promise.all([
+      const [dashData, bkData, vsData, custData, inqData, pkgData, blogData, flData, subData, convData, ctryData, stfData, settData, templData, ratesData, fldData] = await Promise.all([
         api.get('/analytics/dashboard').catch(() => null),
         api.get('/bookings').catch(() => []),
         api.get('/visa/applications').catch(() => []),
@@ -467,6 +473,7 @@ export default function AdminPage() {
         api.get('/analytics/settings').catch(() => ({})),
         api.get('/document-templates').catch(() => []),
         api.get('/flights/rates').catch(() => []),
+        api.get('/document-templates/folders').catch(() => []),
       ]);
       if (dashData) setStats(dashData);
       setBookings(bkData);
@@ -483,6 +490,7 @@ export default function AdminPage() {
       setStaffList(stfData);
       setBusinessSettings(settData);
       if (templData) setDocTemplates(templData);
+      if (fldData) setCustomFolders(fldData);
     } catch (err) { console.error('Admin data load error:', err); }
     finally { setLoading(false); }
   }, []);
@@ -587,7 +595,8 @@ export default function AdminPage() {
     try {
       const payload = {
         ...templateForm,
-        required: templateForm.required ? 1 : 0
+        required: templateForm.required ? 1 : 0,
+        folder_id: templateForm.folder_id === '' ? null : templateForm.folder_id
       };
       if (editingTemplate) {
         await api.put(`/document-templates/${editingTemplate.id}`, payload);
@@ -598,9 +607,45 @@ export default function AdminPage() {
       }
       setTemplateModal(false);
       setEditingTemplate(null);
-      setTemplateForm({ service_type:'visa', country:'', name:'', description:'', required:1 });
+      setTemplateForm({ service_type:'visa', country:'', name:'', description:'', required:1, folder_id:'' });
       await loadAllData();
     } catch (err) { showToast(err.message, 'error'); }
+  };
+
+  // Custom Folder handlers
+  const handleSaveCustomFolder = async () => {
+    if (!customFolderForm.name || customFolderForm.name.trim() === '') {
+      return alert('Folder name is required.');
+    }
+    try {
+      if (editingCustomFolder) {
+        await api.put(`/document-templates/folders/${editingCustomFolder.id}`, customFolderForm);
+        showToast('Folder updated');
+      } else {
+        await api.post('/document-templates/folders', customFolderForm);
+        showToast('Folder created');
+      }
+      setCustomFolderModal(false);
+      setEditingCustomFolder(null);
+      setCustomFolderForm({ name: '' });
+      await loadAllData();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleDeleteCustomFolder = async (id) => {
+    if (!confirm('Are you sure you want to delete this folder? The templates inside it will be unassigned but NOT deleted.')) return;
+    try {
+      await api.delete(`/document-templates/folders/${id}`);
+      showToast('Folder deleted');
+      if (selectedCustomFolder?.id === id) {
+        setSelectedCustomFolder(null);
+      }
+      await loadAllData();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
   };
 
   const handleDeleteTemplate = async (id) => {
@@ -1263,83 +1308,203 @@ export default function AdminPage() {
                         return [];
                       };
 
-                      return !selectedFolder ? (
+                      return (
                         <div>
-                          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
-                            <h1 className="heading-2">Document Checklist Templates</h1>
-                            <button className="btn btn-primary btn-sm" onClick={() => { setEditingTemplate(null); setTemplateForm({ service_type:'visa', country:'', name:'', description:'', required:1 }); setTemplateModal(true); }}><Plus size={14}/> Add Template</button>
+                          {/* Sub-tab Switcher */}
+                          <div style={{ display:'flex', gap:12, borderBottom:'1px solid var(--color-border)', marginBottom:20, paddingBottom:8 }}>
+                            <button 
+                              onClick={() => { setDocSubTab('system'); setSelectedFolder(null); setSelectedCustomFolder(null); }}
+                              style={{
+                                background:'none', border:'none', fontSize:14, fontWeight:600, cursor:'pointer', padding:'4px 8px',
+                                color: docSubTab === 'system' ? 'var(--color-secondary)' : 'var(--color-text-muted)',
+                                borderBottom: docSubTab === 'system' ? '2px solid var(--color-secondary)' : 'none',
+                              }}
+                            >
+                              Service & Country Groups (System)
+                            </button>
+                            <button 
+                              onClick={() => { setDocSubTab('custom'); setSelectedFolder(null); setSelectedCustomFolder(null); }}
+                              style={{
+                                background:'none', border:'none', fontSize:14, fontWeight:600, cursor:'pointer', padding:'4px 8px',
+                                color: docSubTab === 'custom' ? 'var(--color-secondary)' : 'var(--color-text-muted)',
+                                borderBottom: docSubTab === 'custom' ? '2px solid var(--color-secondary)' : 'none',
+                              }}
+                            >
+                              Custom Document Folders
+                            </button>
                           </div>
-                          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))', gap:16, marginTop:16 }}>
-                            {folders.map(f => {
-                              const count = getFolderCount(f);
-                              return (
-                                <div
-                                  key={f.id}
-                                  className="card hover-glow"
-                                  style={{ padding:24, cursor:'pointer', display:'flex', flexDirection:'column', gap:12, position:'relative', border:'1px solid var(--color-border)', borderRadius:'var(--radius-xl)', transition:'all 0.2s' }}
-                                  onClick={() => setSelectedFolder(f)}
-                                >
-                                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                                    <span style={{ fontSize:32 }}>{f.icon}</span>
-                                    <span style={{ fontSize:11, fontWeight:700, color:'var(--color-text-muted)', background:'var(--color-bg)', padding:'3px 10px', borderRadius:12 }}>{count} items</span>
-                                  </div>
-                                  <div>
-                                    <h4 style={{ fontWeight:700, fontSize:15, margin:0 }}>{f.name}</h4>
-                                    <p className="text-muted" style={{ fontSize:11, marginTop:4, marginBottom:0 }}>
-                                      {f.service_type === 'visa' ? `${f.country ? f.country + ' Visa' : 'General Schengen'} templates` : `${f.name} templates`}
-                                    </p>
-                                  </div>
+
+                          {docSubTab === 'system' ? (
+                            !selectedFolder ? (
+                              <div>
+                                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+                                  <h1 className="heading-2">Document Checklist Templates</h1>
+                                  <button className="btn btn-primary btn-sm" onClick={() => { setEditingTemplate(null); setTemplateForm({ service_type:'visa', country:'', name:'', description:'', required:1, folder_id:'' }); setTemplateModal(true); }}><Plus size={14}/> Add Template</button>
                                 </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ) : (
-                        <div>
-                          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:12 }}>
-                            <div>
-                              <button className="btn btn-ghost btn-sm" onClick={() => setSelectedFolder(null)} style={{ marginBottom:8, padding:0, display:'flex', alignItems:'center', gap:4, color:'var(--color-secondary)', fontWeight:600 }}><ChevronLeft size={16}/> Back to Folders</button>
-                              <h1 className="heading-2">{selectedFolder.name}</h1>
-                            </div>
-                            <button className="btn btn-primary btn-sm" onClick={() => {
-                              setEditingTemplate(null);
-                              setTemplateForm({
-                                service_type: selectedFolder.service_type || 'visa',
-                                country: selectedFolder.country || '',
-                                name: '',
-                                description: '',
-                                required: 1
-                              });
-                              setTemplateModal(true);
-                            }}><Plus size={14}/> Add Template in {selectedFolder.name}</button>
-                          </div>
-                          <div className="card admin-table-wrap">
-                            <table className="admin-table">
-                              <thead><tr>{['Service','Country','Document Name','Description','Required','Actions'].map(h=><th key={h}>{h}</th>)}</tr></thead>
-                              <tbody>
-                                {getFolderTemplates(selectedFolder).map((t,i) => (
-                                  <tr key={i}>
-                                    <td style={{ textTransform:'capitalize', fontWeight:600 }}>{t.service_type?.replace(/_/g,' ')}</td>
-                                    <td>{t.country || 'All Countries'}</td>
-                                    <td style={{ fontWeight:600 }}>{t.name}</td>
-                                    <td style={{ fontSize:12, color:'var(--color-text-muted)' }}>{t.description || '-'}</td>
-                                    <td>{t.required ? <span style={{ color:'var(--color-danger)', fontWeight:600 }}>Yes</span> : <span className="text-muted">No</span>}</td>
-                                    <td>
-                                      <div style={{ display:'flex', gap:4 }}>
-                                        <button className="admin-action-btn info" onClick={() => {
-                                          setEditingTemplate(t);
-                                          setTemplateForm({ service_type:t.service_type, country:t.country||'', name:t.name, description:t.description||'', required:t.required });
-                                          setTemplateModal(true);
-                                        }}><Edit2 size={12}/> Edit</button>
-                                        <button className="admin-action-btn danger" onClick={() => handleDeleteTemplate(t.id)}><Trash2 size={12}/></button>
+                                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))', gap:16, marginTop:16 }}>
+                                  {folders.map(f => {
+                                    const count = getFolderCount(f);
+                                    return (
+                                      <div
+                                        key={f.id}
+                                        className="card hover-glow"
+                                        style={{ padding:24, cursor:'pointer', display:'flex', flexDirection:'column', gap:12, position:'relative', border:'1px solid var(--color-border)', borderRadius:'var(--radius-xl)', transition:'all 0.2s' }}
+                                        onClick={() => setSelectedFolder(f)}
+                                      >
+                                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                                          <span style={{ fontSize:32 }}>{f.icon}</span>
+                                          <span style={{ fontSize:11, fontWeight:700, color:'var(--color-text-muted)', background:'var(--color-bg)', padding:'3px 10px', borderRadius:12 }}>{count} items</span>
+                                        </div>
+                                        <div>
+                                          <h4 style={{ fontWeight:700, fontSize:15, margin:0 }}>{f.name}</h4>
+                                          <p className="text-muted" style={{ fontSize:11, marginTop:4, marginBottom:0 }}>
+                                            {f.service_type === 'visa' ? `${f.country ? f.country + ' Visa' : 'General Schengen'} templates` : `${f.name} templates`}
+                                          </p>
+                                        </div>
                                       </div>
-                                    </td>
-                                  </tr>
-                                ))}
-                                {getFolderTemplates(selectedFolder).length===0 && <tr><td colSpan={6} style={{ textAlign:'center', padding:30, color:'var(--color-text-muted)' }}>No document templates in this folder.</td></tr>}
-                              </tbody>
-                            </table>
-                          </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ) : (
+                              <div>
+                                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:12 }}>
+                                  <div>
+                                    <button className="btn btn-ghost btn-sm" onClick={() => setSelectedFolder(null)} style={{ marginBottom:8, padding:0, display:'flex', alignItems:'center', gap:4, color:'var(--color-secondary)', fontWeight:600 }}><ChevronLeft size={16}/> Back to Folders</button>
+                                    <h1 className="heading-2">{selectedFolder.name}</h1>
+                                  </div>
+                                  <button className="btn btn-primary btn-sm" onClick={() => {
+                                    setEditingTemplate(null);
+                                    setTemplateForm({
+                                      service_type: selectedFolder.service_type || 'visa',
+                                      country: selectedFolder.country || '',
+                                      name: '',
+                                      description: '',
+                                      required: 1,
+                                      folder_id: ''
+                                    });
+                                    setTemplateModal(true);
+                                  }}><Plus size={14}/> Add Template in {selectedFolder.name}</button>
+                                </div>
+                                <div className="card admin-table-wrap">
+                                  <table className="admin-table">
+                                    <thead><tr>{['Service','Country','Document Name','Description','Required','Actions'].map(h=><th key={h}>{h}</th>)}</tr></thead>
+                                    <tbody>
+                                      {getFolderTemplates(selectedFolder).map((t,i) => (
+                                        <tr key={i}>
+                                          <td style={{ textTransform:'capitalize', fontWeight:600 }}>{t.service_type?.replace(/_/g,' ')}</td>
+                                          <td>{t.country || 'All Countries'}</td>
+                                          <td style={{ fontWeight:600 }}>{t.name}</td>
+                                          <td style={{ fontSize:12, color:'var(--color-text-muted)' }}>{t.description || '-'}</td>
+                                          <td>{t.required ? <span style={{ color:'var(--color-danger)', fontWeight:600 }}>Yes</span> : <span className="text-muted">No</span>}</td>
+                                          <td>
+                                            <div style={{ display:'flex', gap:4 }}>
+                                              <button className="admin-action-btn info" onClick={() => {
+                                                setEditingTemplate(t);
+                                                setTemplateForm({ service_type:t.service_type, country:t.country||'', name:t.name, description:t.description||'', required:t.required, folder_id: t.folder_id || '' });
+                                                setTemplateModal(true);
+                                              }}><Edit2 size={12}/> Edit</button>
+                                              <button className="admin-action-btn danger" onClick={() => handleDeleteTemplate(t.id)}><Trash2 size={12}/></button>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                      {getFolderTemplates(selectedFolder).length===0 && <tr><td colSpan={6} style={{ textAlign:'center', padding:30, color:'var(--color-text-muted)' }}>No document templates in this folder.</td></tr>}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )
+                          ) : (
+                            !selectedCustomFolder ? (
+                              <div>
+                                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+                                  <h1 className="heading-2">Custom Document Folders</h1>
+                                  <button className="btn btn-primary btn-sm" onClick={() => { setEditingCustomFolder(null); setCustomFolderForm({ name:'' }); setCustomFolderModal(true); }}><Plus size={14}/> Add Custom Folder</button>
+                                </div>
+                                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))', gap:16, marginTop:16 }}>
+                                  {customFolders.map(f => (
+                                    <div
+                                      key={f.id}
+                                      className="card hover-glow"
+                                      style={{ padding:24, cursor:'pointer', display:'flex', flexDirection:'column', gap:12, position:'relative', border:'1px solid var(--color-border)', borderRadius:'var(--radius-xl)', transition:'all 0.2s' }}
+                                      onClick={() => setSelectedCustomFolder(f)}
+                                    >
+                                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                                        <span style={{ fontSize:32 }}>📁</span>
+                                        <span style={{ fontSize:11, fontWeight:700, color:'var(--color-text-muted)', background:'var(--color-bg)', padding:'3px 10px', borderRadius:12 }}>{f.template_count || 0} items</span>
+                                      </div>
+                                      <div>
+                                        <h4 style={{ fontWeight:700, fontSize:15, margin:0 }}>{f.name}</h4>
+                                        <p className="text-muted" style={{ fontSize:11, marginTop:4, marginBottom:0 }}>
+                                          Custom shared checklist folder
+                                        </p>
+                                      </div>
+                                      <div style={{ display:'flex', gap:6, justifyContent:'flex-end', marginTop:8 }} onClick={e => e.stopPropagation()}>
+                                        <button className="admin-action-btn info" onClick={() => { setEditingCustomFolder(f); setCustomFolderForm({ name: f.name }); setCustomFolderModal(true); }}><Edit2 size={12}/></button>
+                                        <button className="admin-action-btn danger" onClick={() => handleDeleteCustomFolder(f.id)}><Trash2 size={12}/></button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  {customFolders.length === 0 && (
+                                    <div style={{ gridColumn:'1/-1', textAlign:'center', padding:40, color:'var(--color-text-muted)', border:'1px dashed var(--color-border)', borderRadius:12 }}>
+                                      No custom folders created yet. Click "Add Custom Folder" to get started.
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <div>
+                                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:12 }}>
+                                  <div>
+                                    <button className="btn btn-ghost btn-sm" onClick={() => setSelectedCustomFolder(null)} style={{ marginBottom:8, padding:0, display:'flex', alignItems:'center', gap:4, color:'var(--color-secondary)', fontWeight:600 }}><ChevronLeft size={16}/> Back to Folders</button>
+                                    <h1 className="heading-2">{selectedCustomFolder.name}</h1>
+                                  </div>
+                                  <button className="btn btn-primary btn-sm" onClick={() => {
+                                    setEditingTemplate(null);
+                                    setTemplateForm({
+                                      service_type: 'visa',
+                                      country: '',
+                                      name: '',
+                                      description: '',
+                                      required: 1,
+                                      folder_id: selectedCustomFolder.id
+                                    });
+                                    setTemplateModal(true);
+                                  }}><Plus size={14}/> Add Template in {selectedCustomFolder.name}</button>
+                                </div>
+                                <div className="card admin-table-wrap">
+                                  <table className="admin-table">
+                                    <thead><tr>{['Service','Country','Document Name','Description','Required','Actions'].map(h=><th key={h}>{h}</th>)}</tr></thead>
+                                    <tbody>
+                                      {docTemplates.filter(t => t.folder_id === selectedCustomFolder.id).map((t,i) => (
+                                        <tr key={i}>
+                                          <td style={{ textTransform:'capitalize', fontWeight:600 }}>{t.service_type?.replace(/_/g,' ')}</td>
+                                          <td>{t.country || 'All Countries'}</td>
+                                          <td style={{ fontWeight:600 }}>{t.name}</td>
+                                          <td style={{ fontSize:12, color:'var(--color-text-muted)' }}>{t.description || '-'}</td>
+                                          <td>{t.required ? <span style={{ color:'var(--color-danger)', fontWeight:600 }}>Yes</span> : <span className="text-muted">No</span>}</td>
+                                          <td>
+                                            <div style={{ display:'flex', gap:4 }}>
+                                              <button className="admin-action-btn info" onClick={() => {
+                                                setEditingTemplate(t);
+                                                setTemplateForm({ service_type:t.service_type, country:t.country||'', name:t.name, description:t.description||'', required:t.required, folder_id: t.folder_id || '' });
+                                                setTemplateModal(true);
+                                              }}><Edit2 size={12}/> Edit</button>
+                                              <button className="admin-action-btn danger" onClick={() => handleDeleteTemplate(t.id)}><Trash2 size={12}/></button>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                      {docTemplates.filter(t => t.folder_id === selectedCustomFolder.id).length === 0 && (
+                                        <tr><td colSpan={6} style={{ textAlign:'center', padding:30, color:'var(--color-text-muted)' }}>No document templates in this folder.</td></tr>
+                                      )}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )
+                          )}
                         </div>
                       );
                     })()}
@@ -2291,74 +2456,141 @@ export default function AdminPage() {
                 <h4 style={{ fontSize:14, fontWeight:700, marginBottom:12, display:'flex', alignItems:'center', gap:6 }}><ClipboardList size={16} color="var(--color-secondary)"/> 📁 Document Checklist Management</h4>
                 
                 {/* Request from Template */}
-                <div style={{ display:'flex', gap:8, marginBottom:16, background:'var(--color-bg)', padding:12, borderRadius:8, border:'1px solid var(--color-border)', flexWrap:'wrap', alignItems:'center' }}>
-                  <span style={{ fontSize:12, fontWeight:600 }}>Apply Checklist Template:</span>
-                  <select 
-                    id="doc-template-select" 
-                    className="form-input form-select" 
-                    style={{ flex:1, fontSize:13, padding:'4px 8px', height:34, minWidth:200 }}
-                  >
-                    <option value="">Select a template checklist...</option>
-                    {/* Unique template groupings */}
-                    {Array.from(new Set(docTemplates.map(t => `${t.service_type}${t.country ? '-' + t.country : ''}`))).map(groupKey => {
-                      const tSample = docTemplates.find(t => `${t.service_type}${t.country ? '-' + t.country : ''}` === groupKey);
-                      return (
-                        <option key={groupKey} value={groupKey}>
-                          {tSample.service_type.toUpperCase()} {tSample.country ? `(${tSample.country})` : '(General)'}
-                        </option>
-                      );
-                    })}
-                  </select>
-                  <select id="template-traveler-select" className="form-input form-select" style={{ fontSize:13, height:34, maxWidth:180 }}>
-                    <option value="Primary Applicant">Primary Applicant</option>
-                    {getArrayField(detailModal.data.travelers_json).map((t, idx) => (
-                      <option key={idx} value={t.name}>{t.name} (Co-applicant)</option>
-                    ))}
-                  </select>
-                  <button 
-                    className="btn btn-outline btn-sm"
-                    style={{ whiteSpace:'nowrap', padding:'6px 12px' }}
-                    onClick={async () => {
-                      const select = document.getElementById('doc-template-select');
-                      const selectedGroup = select?.value;
-                      if (!selectedGroup) return alert('Select a template first.');
-                      
-                      const travelerSelect = document.getElementById('template-traveler-select');
-                      const travelerName = travelerSelect?.value || 'Primary Applicant';
-                      
-                      const filteredTemplates = docTemplates.filter(t => `${t.service_type}${t.country ? '-' + t.country : ''}` === selectedGroup);
-                      if (filteredTemplates.length === 0) return alert('No templates found.');
-                      
-                      const currentDocs = detailModal.data.documents_json || [];
-                      const nextDocs = [...currentDocs];
-                      for (const temp of filteredTemplates) {
-                        // Check if document with same name already exists in checklist
-                        if (!nextDocs.some(d => d.name.toLowerCase() === temp.name.toLowerCase() && (d.traveler_name || 'Primary Applicant') === travelerName)) {
-                          nextDocs.push({
-                            id: 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-                            name: temp.name,
-                            is_requested: true,
-                            status: 'pending_upload',
-                            filename: '',
-                            url: '',
-                            traveler_name: travelerName
-                          });
+                {/* Request from Template or Folder */}
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
+                  {/* System checklist select */}
+                  <div style={{ display:'flex', gap:8, background:'var(--color-bg)', padding:12, borderRadius:8, border:'1px solid var(--color-border)', flexWrap:'wrap', alignItems:'center' }}>
+                    <span style={{ fontSize:12, fontWeight:600 }}>Apply System Checklist:</span>
+                    <select 
+                      id="doc-template-select" 
+                      className="form-input form-select" 
+                      style={{ flex:1, fontSize:13, padding:'4px 8px', height:34, minWidth:200 }}
+                    >
+                      <option value="">Select a template checklist...</option>
+                      {/* Unique template groupings */}
+                      {Array.from(new Set(docTemplates.map(t => `${t.service_type}${t.country ? '-' + t.country : ''}`))).map(groupKey => {
+                        const tSample = docTemplates.find(t => `${t.service_type}${t.country ? '-' + t.country : ''}` === groupKey);
+                        return (
+                          <option key={groupKey} value={groupKey}>
+                            {tSample.service_type.toUpperCase()} {tSample.country ? `(${tSample.country})` : '(General)'}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <select id="template-traveler-select" className="form-input form-select" style={{ fontSize:13, height:34, maxWidth:180 }}>
+                      <option value="Primary Applicant">Primary Applicant</option>
+                      {getArrayField(detailModal.data.travelers_json).map((t, idx) => (
+                        <option key={idx} value={t.name}>{t.name} (Co-applicant)</option>
+                      ))}
+                    </select>
+                    <button 
+                      className="btn btn-outline btn-sm"
+                      style={{ whiteSpace:'nowrap', padding:'6px 12px' }}
+                      onClick={async () => {
+                        const select = document.getElementById('doc-template-select');
+                        const selectedGroup = select?.value;
+                        if (!selectedGroup) return alert('Select a template first.');
+                        
+                        const travelerSelect = document.getElementById('template-traveler-select');
+                        const travelerName = travelerSelect?.value || 'Primary Applicant';
+                        
+                        const filteredTemplates = docTemplates.filter(t => `${t.service_type}${t.country ? '-' + t.country : ''}` === selectedGroup);
+                        if (filteredTemplates.length === 0) return alert('No templates found.');
+                        
+                        const currentDocs = detailModal.data.documents_json || [];
+                        const nextDocs = [...currentDocs];
+                        for (const temp of filteredTemplates) {
+                          if (!nextDocs.some(d => d.name.toLowerCase() === temp.name.toLowerCase() && (d.traveler_name || 'Primary Applicant') === travelerName)) {
+                            nextDocs.push({
+                              id: 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                              name: temp.name,
+                              is_requested: true,
+                              status: 'pending_upload',
+                              filename: '',
+                              url: '',
+                              traveler_name: travelerName
+                            });
+                          }
                         }
-                      }
-                      
-                      try {
-                        await api.put(`/visa/applications/${detailModal.data.id}`, { documents: nextDocs });
-                        showToast('Checklist applied from template');
-                        setDetailModal({
-                          ...detailModal,
-                          data: { ...detailModal.data, documents_json: nextDocs }
-                        });
-                        await loadAllData();
-                      } catch (err) { showToast(err.message, 'error'); }
-                    }}
-                  >
-                    Apply Template
-                  </button>
+                        
+                        try {
+                          await api.put(`/visa/applications/${detailModal.data.id}`, { documents: nextDocs });
+                          showToast('Checklist applied from template');
+                          setDetailModal({
+                            ...detailModal,
+                            data: { ...detailModal.data, documents_json: nextDocs }
+                          });
+                          await loadAllData();
+                        } catch (err) { showToast(err.message, 'error'); }
+                      }}
+                    >
+                      Apply Group
+                    </button>
+                  </div>
+
+                  {/* Custom Folder select */}
+                  <div style={{ display:'flex', gap:8, background:'var(--color-bg)', padding:12, borderRadius:8, border:'1px solid var(--color-border)', flexWrap:'wrap', alignItems:'center' }}>
+                    <span style={{ fontSize:12, fontWeight:600 }}>Apply Custom Folder:</span>
+                    <select 
+                      id="doc-folder-select" 
+                      className="form-input form-select" 
+                      style={{ flex:1, fontSize:13, padding:'4px 8px', height:34, minWidth:200 }}
+                    >
+                      <option value="">Select a custom folder...</option>
+                      {customFolders.map(f => (
+                        <option key={f.id} value={f.id}>{f.name} ({f.template_count || 0} docs)</option>
+                      ))}
+                    </select>
+                    <select id="folder-traveler-select" className="form-input form-select" style={{ fontSize:13, height:34, maxWidth:180 }}>
+                      <option value="Primary Applicant">Primary Applicant</option>
+                      {getArrayField(detailModal.data.travelers_json).map((t, idx) => (
+                        <option key={idx} value={t.name}>{t.name} (Co-applicant)</option>
+                      ))}
+                    </select>
+                    <button 
+                      className="btn btn-outline btn-sm"
+                      style={{ whiteSpace:'nowrap', padding:'6px 12px' }}
+                      onClick={async () => {
+                        const select = document.getElementById('doc-folder-select');
+                        const selectedFolderId = select?.value;
+                        if (!selectedFolderId) return alert('Select a folder first.');
+                        
+                        const travelerSelect = document.getElementById('folder-traveler-select');
+                        const travelerName = travelerSelect?.value || 'Primary Applicant';
+                        
+                        const folderTemplates = docTemplates.filter(t => t.folder_id === parseInt(selectedFolderId));
+                        if (folderTemplates.length === 0) return alert('No templates found in this folder.');
+                        
+                        const currentDocs = detailModal.data.documents_json || [];
+                        const nextDocs = [...currentDocs];
+                        for (const temp of folderTemplates) {
+                          if (!nextDocs.some(d => d.name.toLowerCase() === temp.name.toLowerCase() && (d.traveler_name || 'Primary Applicant') === travelerName)) {
+                            nextDocs.push({
+                              id: 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                              name: temp.name,
+                              is_requested: true,
+                              status: 'pending_upload',
+                              filename: '',
+                              url: '',
+                              traveler_name: travelerName
+                            });
+                          }
+                        }
+                        
+                        try {
+                          await api.put(`/visa/applications/${detailModal.data.id}`, { documents: nextDocs });
+                          showToast('Checklist applied from custom folder');
+                          setDetailModal({
+                            ...detailModal,
+                            data: { ...detailModal.data, documents_json: nextDocs }
+                          });
+                          await loadAllData();
+                        } catch (err) { showToast(err.message, 'error'); }
+                      }}
+                    >
+                      Apply Folder
+                    </button>
+                  </div>
                 </div>
  
                 {/* Request New Document Form */}
@@ -2473,6 +2705,23 @@ export default function AdminPage() {
                                   </>) : (
                                     <StatusBadge status={doc.status} />
                                   )}
+                                  <button
+                                    className="admin-action-btn danger"
+                                    onClick={async () => {
+                                      if (!confirm(`Are you sure you want to remove the request for "${doc.name}"?`)) return;
+                                      const updatedDocs = docs.filter(d => d.id !== doc.id);
+                                      try {
+                                        await api.put(`/visa/applications/${detailModal.data.id}`, { documents: updatedDocs });
+                                        showToast('Document request removed');
+                                        setDetailModal({ ...detailModal, data: { ...detailModal.data, documents_json: updatedDocs } });
+                                        await loadAllData();
+                                      } catch (err) { showToast(err.message, 'error'); }
+                                    }}
+                                    title="Remove Document Request"
+                                    style={{ padding: 4 }}
+                                  >
+                                    <Trash2 size={12}/>
+                                  </button>
                                 </div>
                               </div>
                             ))}
@@ -2654,10 +2903,33 @@ export default function AdminPage() {
               <option value={0}>No (Optional)</option>
             </select>
           </div>
+          <div className="form-group">
+            <label className="form-label">Folder (Optional)</label>
+            <select className="form-input form-select" value={templateForm.folder_id || ''} onChange={e=>setTemplateForm({...templateForm,folder_id:e.target.value ? parseInt(e.target.value) : ''})}>
+              <option value="">No Folder (Unassigned)</option>
+              {customFolders.map(f => (
+                <option key={f.id} value={f.id}>{f.name}</option>
+              ))}
+            </select>
+          </div>
         </div>
         <div style={{ marginTop:20, display:'flex', gap:12, justifyContent:'flex-end' }}>
           <button className="btn btn-ghost" onClick={() => setTemplateModal(false)}>Cancel</button>
           <button className="btn btn-primary" onClick={handleSaveTemplate}><Save size={16}/> Save Template</button>
+        </div>
+      </Modal>
+
+      {/* Custom Folder Modal */}
+      <Modal open={customFolderModal} onClose={() => setCustomFolderModal(false)} title={editingCustomFolder ? "Rename Folder" : "Add Custom Folder"}>
+        <div style={{ display:'grid', gap:14 }}>
+          <div className="form-group">
+            <label className="form-label">Folder Name *</label>
+            <input className="form-input" placeholder="e.g. Employee Visa Documents" value={customFolderForm.name} onChange={e => setCustomFolderForm({ name: e.target.value })}/>
+          </div>
+        </div>
+        <div style={{ marginTop:20, display:'flex', gap:12, justifyContent:'flex-end' }}>
+          <button className="btn btn-ghost" onClick={() => setCustomFolderModal(false)}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSaveCustomFolder}><Save size={16}/> Save Folder</button>
         </div>
       </Modal>
 
