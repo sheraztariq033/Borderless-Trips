@@ -3,10 +3,7 @@
   "version": "1.0.0",
   "description": "Fullstack Premium Travel & Visa Services Portal",
   "scripts": {
-    "install:client": "npm install --include=dev --prefix client",
-    "install:server": "npm install --prefix server",
-    "build:client": "npm run build --prefix client",
-    "build": "npm run install:client && npm run install:server && npm run build:client",
+    "build": "npm install --omit=none --prefix client && npm install --prefix server && npm run build --prefix client",
     "start": "node server/server.js"
   },
   "engines": {
