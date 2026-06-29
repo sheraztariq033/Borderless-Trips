@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: borderless-trips
+    env: node
+    plan: starter # Starter plan is required for Persistent Disks
+    buildCommand: npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
+    disk:
+      name: borderless-db-uploads
+      mountPath: /opt/render/project/src/server/data
+      sizeGB: 1
