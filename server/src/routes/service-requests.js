@@ -361,7 +361,7 @@ router.post('/:id/convert', authenticate, adminOnly, (req, res) => {
 
     // Update the service request status to completed and log the conversion reference
     const updatedNotes = `${sr.admin_notes || ''}\n[System] Converted to ${targetRef} on ${new Date().toLocaleDateString()}`.trim();
-    db.prepare('UPDATE service_requests SET status = "completed", admin_notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    db.prepare("UPDATE service_requests SET status = 'completed', admin_notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
       .run(updatedNotes, id);
 
     res.json({ message: resultMsg, targetRef, status: 'completed' });
