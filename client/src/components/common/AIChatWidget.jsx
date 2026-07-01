@@ -291,7 +291,7 @@ export default function AIChatWidget() {
   const handleSaveInquiry = async (evalResult) => {
     setSaveStatus('loading');
     try {
-      const response = await fetch('/api/inquiries/evaluate', {
+      const response = await fetch('/api/service-requests', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -300,13 +300,20 @@ export default function AIChatWidget() {
           name: saveForm.name,
           email: saveForm.email,
           phone: saveForm.phone,
+          service_type: 'visa',
           country: answers.destination || 'Schengen',
-          nationality: answers.nationality || '',
-          purpose: answers.purpose || '',
-          employed: answers.employment || '',
-          funds: answers.financial || '',
-          history: answers.travel_history || '',
-          rejection: answers.previous_rejection || '',
+          details: {
+            score: evalResult.score,
+            level: evalResult.level,
+            nationality: answers.nationality || '',
+            purpose: answers.purpose || '',
+            employed: answers.employment || '',
+            funds: answers.financial || '',
+            history: answers.travel_history || '',
+            rejection: answers.previous_rejection || '',
+          },
+          create_account: true,
+          password: 'welcome123'
         })
       });
       
@@ -328,7 +335,7 @@ export default function AIChatWidget() {
   const handleSaveServiceInquiry = async (type) => {
     setServiceSaveStatus('loading');
     try {
-      const response = await fetch('/api/inquiries/evaluate', {
+      const response = await fetch('/api/service-requests', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -337,13 +344,14 @@ export default function AIChatWidget() {
           name: serviceForm.name,
           email: serviceForm.email,
           phone: serviceForm.phone,
+          service_type: type === 'packages' ? 'holiday_package' : type === 'flights' ? 'flight' : 'consultation',
           country: serviceForm.country || 'Any',
-          nationality: serviceForm.nationality || 'Any',
-          purpose: type === 'packages' ? 'Holiday Package' : type === 'flights' ? 'Flight Booking' : 'Agent Consultation',
-          employed: serviceForm.notes,
-          funds: 'Yes',
-          history: 'No',
-          rejection: 'No'
+          details: {
+            nationality: serviceForm.nationality || 'Any',
+            notes: serviceForm.notes
+          },
+          create_account: true,
+          password: 'welcome123'
         })
       });
 
@@ -352,12 +360,12 @@ export default function AIChatWidget() {
         setServiceSaveData(data);
         setServiceSaveStatus('success');
       } else {
-        alert(data.error || 'Failed to save inquiry.');
+        alert(data.error || 'Failed to save request.');
         setServiceSaveStatus('idle');
       }
     } catch (e) {
       console.error(e);
-      alert('Network error. Failed to save inquiry.');
+      alert('Network error. Failed to save request.');
       setServiceSaveStatus('idle');
     }
   };

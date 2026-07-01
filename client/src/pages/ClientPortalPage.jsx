@@ -487,6 +487,15 @@ export default function ClientPortalPage() {
     } catch (err) { alert('Failed: ' + err.message); }
   };
 
+  const handleCancelRequest = async (id) => {
+    if (!confirm('Are you sure you want to cancel this request?')) return;
+    try {
+      await api.delete(`/service-requests/${id}`);
+      alert('Request cancelled.');
+      await loadPortalData();
+    } catch (err) { alert('Failed to cancel request: ' + err.message); }
+  };
+
   const handleDocumentUpload = async (e, visaAppId, docId = null) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -1253,7 +1262,18 @@ export default function ClientPortalPage() {
                                 <div className="text-muted" style={{ fontSize:11 }}>Ref: {sr.ref} · {new Date(sr.created_at).toLocaleDateString()}</div>
                               </div>
                             </div>
-                            <StatusBadge status={sr.status}/>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              <StatusBadge status={sr.status}/>
+                              {sr.status === 'new' && (
+                                <button 
+                                  className="btn btn-outline btn-sm" 
+                                  style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)', padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}
+                                  onClick={() => handleCancelRequest(sr.id)}
+                                >
+                                  Cancel Request
+                                </button>
+                              )}
+                            </div>
                           </div>
 
                           {/* Progress bar */}

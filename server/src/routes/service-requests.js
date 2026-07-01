@@ -236,12 +236,21 @@ router.put('/:id', authenticate, adminOnly, (req, res) => {
   }
 });
 
-// DELETE /api/service-requests/:id - Delete (Admin)
-router.delete('/:id', authenticate, adminOnly, (req, res) => {
+// DELETE /api/service-requests/:id - Delete (Admin or Owner if pending)
+router.delete('/:id', authenticate, (req, res) => {
   const { id } = req.params;
   try {
-    const request = db.prepare('SELECT id FROM service_requests WHERE id = ?').get(id);
+    const request = db.prepare('SELECT id, user_id, status FROM service_requests WHERE id = ?').get(id);
     if (!request) return res.status(404).json({ error: 'Service request not found.' });
+    
+    // Check permission: admin, or client owner when request is still pending
+    const isOwner = request.user_id === req.user.id;
+    const isPending = request.status === 'new';
+    
+    if (req.user.role !== 'admin' && !(isOwner && isPending)) {
+      return res.status(403).json({ error: 'Access denied. You can only delete pending requests that you created.' });
+    }
+    
     db.prepare('DELETE FROM service_requests WHERE id = ?').run(id);
     res.json({ message: 'Service request deleted.' });
   } catch (error) {
