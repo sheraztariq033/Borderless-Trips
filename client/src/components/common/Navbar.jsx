@@ -49,6 +49,7 @@ export default function Navbar() {
       <nav
         className={`navbar ${scrolled ? 'navbar-scrolled' : ''} ${!isHome || scrolled ? 'navbar-solid' : ''}`}
         id="main-navbar"
+        style={mobileOpen ? { zIndex: 1000001 } : {}}
       >
         <div className="container navbar-inner">
           <Link to="/" className="navbar-logo" id="nav-logo">
@@ -167,6 +168,7 @@ export default function Navbar() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: '100%' }}
             transition={{ type: 'spring', damping: 25 }}
+            style={{ zIndex: 1000000 }}
           >
             <div className="mobile-menu-inner">
               {navLinks.map((link, i) =>
