@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
-import { CreditCard, AlertTriangle, ShieldCheck, RefreshCw } from 'lucide-react';
+import { ShieldCheck, RefreshCw, AlertTriangle } from 'lucide-react';
+import { useSettings } from '../context/SettingsContext';
 
 const Reveal = ({ children, delay = 0 }) => (
   <motion.div 
@@ -12,7 +13,57 @@ const Reveal = ({ children, delay = 0 }) => (
   </motion.div>
 );
 
+// Helper function to format markdown-like policy text dynamically
+function parseBoldText(text) {
+  const parts = text.split('**');
+  return parts.map((part, index) => {
+    if (index % 2 === 1) {
+      return <strong key={index}>{part}</strong>;
+    }
+    return part;
+  });
+}
+
+export function formatPolicyContent(text) {
+  if (!text) return null;
+  const lines = text.split('\n');
+  const rendered = [];
+  let listItems = [];
+  let inList = false;
+
+  const flushList = (key) => {
+    if (listItems.length > 0) {
+      rendered.push(<ul key={`list-${key}`} style={{ paddingLeft: 20, marginBottom: 20 }}>{listItems}</ul>);
+      listItems = [];
+      inList = false;
+    }
+  };
+
+  lines.forEach((line, index) => {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('##')) {
+      flushList(index);
+      rendered.push(<h2 className="heading-3" key={index} style={{ marginTop: 32, marginBottom: 12 }}>{trimmed.replace(/^##\s*/, '')}</h2>);
+    } else if (trimmed.startsWith('*') || trimmed.startsWith('-')) {
+      inList = true;
+      const content = trimmed.replace(/^[\*\-]\s*/, '');
+      listItems.push(<li key={index} style={{ marginBottom: 8 }}>{parseBoldText(content)}</li>);
+    } else if (trimmed === '') {
+      // empty line
+    } else {
+      flushList(index);
+      rendered.push(<p key={index} style={{ marginBottom: 16 }}>{parseBoldText(trimmed)}</p>);
+    }
+  });
+
+  flushList('final');
+  return rendered;
+}
+
 export default function RefundPage() {
+  const { settings } = useSettings();
+  const dynamicContent = settings?.page_refund_policy;
+
   return (
     <div>
       <section className="page-hero">
@@ -54,35 +105,40 @@ export default function RefundPage() {
 
           <Reveal delay={0.1}>
             <div className="rich-text" style={{ fontSize: '14px', lineHeight: '1.7', color: 'var(--color-text)' }}>
-              
-              <h2 className="heading-3" style={{ marginTop: 24, marginBottom: 12 }}>1. Visa Services & Consultations</h2>
-              <p>
-                Our primary goal is to help you successfully obtain your travel visas. Please read the following conditions regarding visa assistance payments:
-              </p>
-              <ul>
-                <li><strong>Professional Service Fees:</strong> The fees charged for travel consultation and application reviews are fully refundable if requested within 24 hours of booking, provided document validation or submission has not commenced.</li>
-                <li><strong>Government & Embassy Fees:</strong> Government embassy visa fee charges, travel insurance premium cards, and biometric booking slots are non-refundable once paid to the respective consular or third-party visa centers.</li>
-                <li><strong>Application Decisions:</strong> Consular departments of the destination countries have sole authority regarding visa approvals and rejections. Borderless Trips cannot issue refunds in the event of consular visa refusal, unless you have selected our Premium Guaranteed Visa Service package (where specific terms apply as declared on the request voucher).</li>
-              </ul>
+              {dynamicContent ? (
+                formatPolicyContent(dynamicContent)
+              ) : (
+                <>
+                  <h2 className="heading-3" style={{ marginTop: 24, marginBottom: 12 }}>1. Visa Services & Consultations</h2>
+                  <p>
+                    Our primary goal is to help you successfully obtain your travel visas. Please read the following conditions regarding visa assistance payments:
+                  </p>
+                  <ul>
+                    <li><strong>Professional Service Fees:</strong> The fees charged for travel consultation and application reviews are fully refundable if requested within 24 hours of booking, provided document validation or submission has not commenced.</li>
+                    <li><strong>Government & Embassy Fees:</strong> Government embassy visa fee charges, travel insurance premium cards, and biometric booking slots are non-refundable once paid to the respective consular or third-party visa centers.</li>
+                    <li><strong>Application Decisions:</strong> Consular departments of the destination countries have sole authority regarding visa approvals and rejections. Borderless Trips cannot issue refunds in the event of consular visa refusal, unless you have selected our Premium Guaranteed Visa Service package (where specific terms apply as declared on the request voucher).</li>
+                  </ul>
 
-              <h2 className="heading-3" style={{ marginTop: 32, marginBottom: 12 }}>2. Holiday Packages & Tours</h2>
-              <p>
-                Cancellations of pre-planned holiday packages are subject to terms dependent on the travel operators and timeline:
-              </p>
-              <ul>
-                <li><strong>30+ Days Before Departure:</strong> Cancellations made 30 days or more prior to the scheduled departure will receive a full refund of deposit payments, less a standard 10% administrative planning fee.</li>
-                <li><strong>15 to 29 Days Before Departure:</strong> Cancellations will be subject to a 50% penalty fee of the package total deposit, unless booking clauses specify otherwise.</li>
-                <li><strong>Under 15 Days Before Departure:</strong> Package cancellations made within 14 days of departure are non-refundable, as flights, hotel slots, and transport activities will have been locked by operators.</li>
-              </ul>
+                  <h2 className="heading-3" style={{ marginTop: 32, marginBottom: 12 }}>2. Holiday Packages & Tours</h2>
+                  <p>
+                    Cancellations of pre-planned holiday packages are subject to terms dependent on the travel operators and timeline:
+                  </p>
+                  <ul>
+                    <li><strong>30+ Days Before Departure:</strong> Cancellations made 30 days or more prior to the scheduled departure will receive a full refund of deposit payments, less a standard 10% administrative planning fee.</li>
+                    <li><strong>15 to 29 Days Before Departure:</strong> Cancellations will be subject to a 50% penalty fee of the package total deposit, unless booking clauses specify otherwise.</li>
+                    <li><strong>Under 15 Days Before Departure:</strong> Package cancellations made within 14 days of departure are non-refundable, as flights, hotel slots, and transport activities will have been locked by operators.</li>
+                  </ul>
 
-              <h2 className="heading-3" style={{ marginTop: 32, marginBottom: 12 }}>3. Flight & Hotel Bookings</h2>
-              <p>
-                Flights and hotel room accommodations are governed directly by airline fare rules and provider booking conditions:
-              </p>
-              <ul>
-                <li><strong>Airlines:</strong> Non-refundable promotional flights are strictly non-refundable as per airline rules. Date changes and cancellations on flexible fares will be processed according to the carrier's terms, subject to any processing fees.</li>
-                <li><strong>Hotels:</strong> Free cancellation rooms can be cancelled without penalty up to the provider's threshold date. Pre-paid non-refundable room rates cannot be refunded.</li>
-              </ul>
+                  <h2 className="heading-3" style={{ marginTop: 32, marginBottom: 12 }}>3. Flight & Hotel Bookings</h2>
+                  <p>
+                    Flights and hotel room accommodations are governed directly by airline fare rules and provider booking conditions:
+                  </p>
+                  <ul>
+                    <li><strong>Airlines:</strong> Non-refundable promotional flights are strictly non-refundable as per airline rules. Date changes and cancellations on flexible fares will be processed according to the carrier's terms, subject to any processing fees.</li>
+                    <li><strong>Hotels:</strong> Free cancellation rooms can be cancelled without penalty up to the provider's threshold date. Pre-paid non-refundable room rates cannot be refunded.</li>
+                  </ul>
+                </>
+              )}
 
               <div style={{ marginTop: 40, padding: '20px', background: 'var(--color-bg-alt)', borderRadius: 12, border: '1px solid var(--color-border)', display: 'flex', gap: 16 }}>
                 <AlertTriangle size={32} color="var(--color-secondary)" style={{ flexShrink: 0 }} />

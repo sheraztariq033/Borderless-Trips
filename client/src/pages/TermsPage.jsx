@@ -1,5 +1,7 @@
 import { motion } from 'framer-motion';
-import { BookOpen, Shield, Globe, Scale } from 'lucide-react';
+import { Shield, Scale } from 'lucide-react';
+import { useSettings } from '../context/SettingsContext';
+import { formatPolicyContent } from './RefundPage';
 
 const Reveal = ({ children, delay = 0 }) => (
   <motion.div 
@@ -13,6 +15,9 @@ const Reveal = ({ children, delay = 0 }) => (
 );
 
 export default function TermsPage() {
+  const { settings } = useSettings();
+  const dynamicContent = settings?.page_terms_of_service;
+
   return (
     <div>
       <section className="page-hero">
@@ -54,49 +59,54 @@ export default function TermsPage() {
 
           <Reveal delay={0.1}>
             <div className="rich-text" style={{ fontSize: '14px', lineHeight: '1.7', color: 'var(--color-text)' }}>
-              
-              <h2 className="heading-3" style={{ marginTop: 24, marginBottom: 12 }}>1. Agreement to Terms</h2>
-              <p>
-                By using our website, AI assistant, or Client Portal, you agree to comply with and be bound by these Terms of Service. If you do not agree to all of these terms, please do not access or use our services.
-              </p>
+              {dynamicContent ? (
+                formatPolicyContent(dynamicContent)
+              ) : (
+                <>
+                  <h2 className="heading-3" style={{ marginTop: 24, marginBottom: 12 }}>1. Agreement to Terms</h2>
+                  <p>
+                    By using our website, AI assistant, or Client Portal, you agree to comply with and be bound by these Terms of Service. If you do not agree to all of these terms, please do not access or use our services.
+                  </p>
 
-              <h2 className="heading-3" style={{ marginTop: 32, marginBottom: 12 }}>2. Services Offered</h2>
-              <p>
-                Borderless Trips acts as an intermediary agency providing Schengen and global visa application support, premium holiday packages, flight reservations, and luxury hotel bookings.
-              </p>
+                  <h2 className="heading-3" style={{ marginTop: 32, marginBottom: 12 }}>2. Services Offered</h2>
+                  <p>
+                    Borderless Trips acts as an intermediary agency providing Schengen and global visa application support, premium holiday packages, flight reservations, and luxury hotel bookings.
+                  </p>
 
-              <h2 className="heading-3" style={{ marginTop: 32, marginBottom: 12 }}>3. User Obligations & Document Accuracy</h2>
-              <p>
-                As a client, you agree to:
-              </p>
-              <ul>
-                <li>Provide accurate, complete, and up-to-date documentation (bank statements, employer letters, identification cards) for visa applications and flight reservations.</li>
-                <li>Verify that passport validity complies with international rules (must not expire within 6 months of departure and have at least 2 blank pages).</li>
-                <li>Acknowledge that submitting false or doctored paperwork to Schengen embassies will lead to immediate cancellation of your request without refund, and report to regulatory agencies.</li>
-              </ul>
+                  <h2 className="heading-3" style={{ marginTop: 32, marginBottom: 12 }}>3. User Obligations & Document Accuracy</h2>
+                  <p>
+                    As a client, you agree to:
+                  </p>
+                  <ul>
+                    <li>Provide accurate, complete, and up-to-date documentation (bank statements, employer letters, identification cards) for visa applications and flight reservations.</li>
+                    <li>Verify that passport validity complies with international rules (must not expire within 6 months of departure and have at least 2 blank pages).</li>
+                    <li>Acknowledge that submitting false or doctored paperwork to Schengen embassies will lead to immediate cancellation of your request without refund, and report to regulatory agencies.</li>
+                  </ul>
 
-              <h2 className="heading-3" style={{ marginTop: 32, marginBottom: 12 }}>4. Payments, Billing & Portal Security</h2>
-              <p>
-                All bookings and service requests require clear transactions:
-              </p>
-              <ul>
-                <li><strong>Billing:</strong> Visa consultation and booking deposits are billed upfront. Balance payments for holiday packages must be completed 15 days before travel, unless agreed otherwise.</li>
-                <li><strong>Portal Accounts:</strong> When an account is auto-created or set up manually, you are solely responsible for keeping your password secure. Inform us immediately if you suspect unauthorized access.</li>
-              </ul>
+                  <h2 className="heading-3" style={{ marginTop: 32, marginBottom: 12 }}>4. Payments, Billing & Portal Security</h2>
+                  <p>
+                    All bookings and service requests require clear transactions:
+                  </p>
+                  <ul>
+                    <li><strong>Billing:</strong> Visa consultation and booking deposits are billed upfront. Balance payments for holiday packages must be completed 15 days before travel, unless agreed otherwise.</li>
+                    <li><strong>Portal Accounts:</strong> When an account is auto-created or set up manually, you are solely responsible for keeping your password secure. Inform us immediately if you suspect unauthorized access.</li>
+                  </ul>
 
-              <h2 className="heading-3" style={{ marginTop: 32, marginBottom: 12 }}>5. Limitation of Liability</h2>
-              <p>
-                Borderless Trips holds zero liability for events outside our operational control (force majeure):
-              </p>
-              <ul>
-                <li>We do not control consular or diplomatic decisions regarding Schengen visa issuances, administrative delays, or biometric slot queues.</li>
-                <li>We are not liable for flight cancellations, carrier rescheduling, lost baggage, hotel booking cancellations, or activity changes managed by third-party suppliers.</li>
-              </ul>
+                  <h2 className="heading-3" style={{ marginTop: 32, marginBottom: 12 }}>5. Limitation of Liability</h2>
+                  <p>
+                    Borderless Trips holds zero liability for events outside our operational control (force majeure):
+                  </p>
+                  <ul>
+                    <li>We do not control consular or diplomatic decisions regarding Schengen visa issuances, administrative delays, or biometric slot queues.</li>
+                    <li>We are not liable for flight cancellations, carrier rescheduling, lost baggage, hotel booking cancellations, or activity changes managed by third-party suppliers.</li>
+                  </ul>
 
-              <h2 className="heading-3" style={{ marginTop: 32, marginBottom: 12 }}>6. Amendments to Terms</h2>
-              <p>
-                We reserve the right to modify these Terms of Service at any time. Changes will be posted to this page and the updated "Last Modified" date will be updated. Continual use of the portal implies acceptance of modifications.
-              </p>
+                  <h2 className="heading-3" style={{ marginTop: 32, marginBottom: 12 }}>6. Amendments to Terms</h2>
+                  <p>
+                    We reserve the right to modify these Terms of Service at any time. Changes will be posted to this page and the updated "Last Modified" date will be updated. Continual use of the portal implies acceptance of modifications.
+                  </p>
+                </>
+              )}
               
               <p style={{ marginTop: 30, fontSize: 12, color: 'var(--color-text-muted)' }}>
                 Last updated: June 30, 2026

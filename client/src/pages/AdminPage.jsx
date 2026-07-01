@@ -2238,7 +2238,7 @@ export default function AdminPage() {
                                         .join(', ');
                                       setBusinessSettings({ ...businessSettings, hero_images: filtered });
                                     }}
-                                    style={{ position:'absolute', top:-4, right:-4, background:'red', color:'white', borderRadius:'50%', width:16, height:16, display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, cursor:'pointer', border:'none' }}
+                                    style={{ position:'absolute', top:-4, right:-4, background:'red', color:'white', borderRadius:'50%', width:16, height:16, display:'flex', alignItems:'center', justifycontent:'center', fontSize:9, cursor:'pointer', border:'none' }}
                                   >
                                     ×
                                   </button>
@@ -2246,6 +2246,51 @@ export default function AdminPage() {
                               ))}
                             </div>
                           )}
+                        </div>
+                      </div>
+
+                      <h3 style={{ fontSize:15, fontWeight:700, margin:'24px 0 16px' }}>Policy Pages Editor</h3>
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:16, background:'rgba(255,255,255,0.02)', padding:16, borderRadius:12, border:'1px solid var(--color-border)' }}>
+                        <div className="form-group">
+                          <label className="form-label">Refund & Cancellation Policy</label>
+                          <textarea
+                            className="form-input form-textarea"
+                            value={businessSettings.page_refund_policy || ''}
+                            onChange={e => setBusinessSettings({ ...businessSettings, page_refund_policy: e.target.value })}
+                            placeholder="Refund Policy content..."
+                            style={{ minHeight: 180, fontFamily: 'monospace', fontSize: 13, background: 'var(--color-bg)' }}
+                          />
+                          <p style={{ fontSize:11, color:'var(--color-text-muted)', marginTop:4 }}>
+                            Supports simple Markdown: Use <code>## Heading</code> for titles, <code>* item</code> for lists, and <code>**bold**</code> for strong text.
+                          </p>
+                        </div>
+
+                        <div className="form-group">
+                          <label className="form-label">Terms of Service</label>
+                          <textarea
+                            className="form-input form-textarea"
+                            value={businessSettings.page_terms_of_service || ''}
+                            onChange={e => setBusinessSettings({ ...businessSettings, page_terms_of_service: e.target.value })}
+                            placeholder="Terms of Service content..."
+                            style={{ minHeight: 180, fontFamily: 'monospace', fontSize: 13, background: 'var(--color-bg)' }}
+                          />
+                          <p style={{ fontSize:11, color:'var(--color-text-muted)', marginTop:4 }}>
+                            Supports simple Markdown: Use <code>## Heading</code> for titles, <code>* item</code> for lists, and <code>**bold**</code> for strong text.
+                          </p>
+                        </div>
+
+                        <div className="form-group">
+                          <label className="form-label">Privacy Policy</label>
+                          <textarea
+                            className="form-input form-textarea"
+                            value={businessSettings.page_privacy_policy || ''}
+                            onChange={e => setBusinessSettings({ ...businessSettings, page_privacy_policy: e.target.value })}
+                            placeholder="Privacy Policy content..."
+                            style={{ minHeight: 180, fontFamily: 'monospace', fontSize: 13, background: 'var(--color-bg)' }}
+                          />
+                          <p style={{ fontSize:11, color:'var(--color-text-muted)', marginTop:4 }}>
+                            Supports simple Markdown: Use <code>## Heading</code> for titles, <code>* item</code> for lists, and <code>**bold**</code> for strong text.
+                          </p>
                         </div>
                       </div>
 

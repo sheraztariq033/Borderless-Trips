@@ -1,5 +1,7 @@
 import { motion } from 'framer-motion';
-import { ShieldAlert, Lock, UserCheck, Eye } from 'lucide-react';
+import { Lock, UserCheck } from 'lucide-react';
+import { useSettings } from '../context/SettingsContext';
+import { formatPolicyContent } from './RefundPage';
 
 const Reveal = ({ children, delay = 0 }) => (
   <motion.div 
@@ -13,6 +15,9 @@ const Reveal = ({ children, delay = 0 }) => (
 );
 
 export default function PrivacyPage() {
+  const { settings } = useSettings();
+  const dynamicContent = settings?.page_privacy_policy;
+
   return (
     <div>
       <section className="page-hero">
@@ -54,53 +59,58 @@ export default function PrivacyPage() {
 
           <Reveal delay={0.1}>
             <div className="rich-text" style={{ fontSize: '14px', lineHeight: '1.7', color: 'var(--color-text)' }}>
-              
-              <h2 className="heading-3" style={{ marginTop: 24, marginBottom: 12 }}>1. Information We Collect</h2>
-              <p>
-                To provide Schengen visa reviews and holiday bookings, we collect the following categories of information:
-              </p>
-              <ul>
-                <li><strong>Contact details:</strong> Name, email address, phone number, and physical mailing address.</li>
-                <li><strong>Identity information:</strong> Nationality, passport number, visa history, and country details.</li>
-                <li><strong>Financial records:</strong> Bank statements, employment documents, and payslips submitted to complete visa checklists.</li>
-                <li><strong>Activity logs:</strong> IP addresses, browser types, session history, and quick-action chats.</li>
-              </ul>
+              {dynamicContent ? (
+                formatPolicyContent(dynamicContent)
+              ) : (
+                <>
+                  <h2 className="heading-3" style={{ marginTop: 24, marginBottom: 12 }}>1. Information We Collect</h2>
+                  <p>
+                    To provide Schengen visa reviews and holiday bookings, we collect the following categories of information:
+                  </p>
+                  <ul>
+                    <li><strong>Contact details:</strong> Name, email address, phone number, and physical mailing address.</li>
+                    <li><strong>Identity information:</strong> Nationality, passport number, visa history, and country details.</li>
+                    <li><strong>Financial records:</strong> Bank statements, employment documents, and payslips submitted to complete visa checklists.</li>
+                    <li><strong>Activity logs:</strong> IP addresses, browser types, session history, and quick-action chats.</li>
+                  </ul>
 
-              <h2 className="heading-3" style={{ marginTop: 32, marginBottom: 12 }}>2. How We Use Your Information</h2>
-              <p>
-                Your personal and travel information is utilized strictly to run our business services:
-              </p>
-              <ul>
-                <li>To calculate your Schengen visa eligibility score and prepare checklist items.</li>
-                <li>To book flight tickets, hotel rooms, and holiday tour packages on your behalf.</li>
-                <li>To provision and administer your personal Client Portal account.</li>
-                <li>To notify you about application updates, payments confirmation, and document reviews.</li>
-              </ul>
+                  <h2 className="heading-3" style={{ marginTop: 32, marginBottom: 12 }}>2. How We Use Your Information</h2>
+                  <p>
+                    Your personal and travel information is utilized strictly to run our business services:
+                  </p>
+                  <ul>
+                    <li>To calculate your Schengen visa eligibility score and prepare checklist items.</li>
+                    <li>To book flight tickets, hotel rooms, and holiday tour packages on your behalf.</li>
+                    <li>To provision and administer your personal Client Portal account.</li>
+                    <li>To notify you about application updates, payments confirmation, and document reviews.</li>
+                  </ul>
 
-              <h2 className="heading-3" style={{ marginTop: 32, marginBottom: 12 }}>3. Document Sharing & Third-Parties</h2>
-              <p>
-                We do **not** sell, rent, or trade your personal travel profiles or documents. We share data only with trusted partners required to fulfill your bookings:
-              </p>
-              <ul>
-                <li>Airlines and hotels to finalize reservations.</li>
-                <li>Embassies and designated visa centers (VFS Global, TLScontact, BLS International) during biometric slot bookings.</li>
-                <li>Government regulatory or judicial institutions where required by law.</li>
-              </ul>
+                  <h2 className="heading-3" style={{ marginTop: 32, marginBottom: 12 }}>3. Document Sharing & Third-Parties</h2>
+                  <p>
+                    We do **not** sell, rent, or trade your personal travel profiles or documents. We share data only with trusted partners required to fulfill your bookings:
+                  </p>
+                  <ul>
+                    <li>Airlines and hotels to finalize reservations.</li>
+                    <li>Embassies and designated visa centers (VFS Global, TLScontact, BLS International) during biometric slot bookings.</li>
+                    <li>Government regulatory or judicial institutions where required by law.</li>
+                  </ul>
 
-              <h2 className="heading-3" style={{ marginTop: 32, marginBottom: 12 }}>4. Data Security</h2>
-              <p>
-                We implement state-of-the-art security measures to protect your sensitive documents:
-              </p>
-              <ul>
-                <li>All uploads are saved on secure server directories.</li>
-                <li>Sessions and API endpoints require JSON Web Token (JWT) authorization header checks.</li>
-                <li>Databases reside in SQLite files mounted in private local server volumes with restricted ssh network layers.</li>
-              </ul>
+                  <h2 className="heading-3" style={{ marginTop: 32, marginBottom: 12 }}>4. Data Security</h2>
+                  <p>
+                    We implement state-of-the-art security measures to protect your sensitive documents:
+                  </p>
+                  <ul>
+                    <li>All uploads are saved on secure server directories.</li>
+                    <li>Sessions and API endpoints require JSON Web Token (JWT) authorization header checks.</li>
+                    <li>Databases reside in SQLite files mounted in private local server volumes with restricted ssh network layers.</li>
+                  </ul>
 
-              <h2 className="heading-3" style={{ marginTop: 32, marginBottom: 12 }}>5. Your Privacy Rights</h2>
-              <p>
-                You retain complete control over your profiles. You can write to our data protection officer at <a href="mailto:privacy@borderlesstrips.com" style={{ fontWeight: 600 }}>privacy@borderlesstrips.com</a> to download, modify, or permanently purge your account records from our servers.
-              </p>
+                  <h2 className="heading-3" style={{ marginTop: 32, marginBottom: 12 }}>5. Your Privacy Rights</h2>
+                  <p>
+                    You retain complete control over your profiles. You can write to our data protection officer at <a href="mailto:privacy@borderlesstrips.com" style={{ fontWeight: 600 }}>privacy@borderlesstrips.com</a> to download, modify, or permanently purge your account records from our servers.
+                  </p>
+                </>
+              )}
               
               <p style={{ marginTop: 30, fontSize: 12, color: 'var(--color-text-muted)' }}>
                 Last updated: June 30, 2026
