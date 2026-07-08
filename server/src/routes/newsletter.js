@@ -4,7 +4,7 @@ const db = require('../models/database');
 const { authenticate, adminOnly } = require('../middleware/auth');
 
 // POST /api/newsletter/subscribe - Subscribe to newsletter
-router.post('/subscribe', (req, res) => {
+router.post('/subscribe', async (req, res) => {
   const { email } = req.body;
 
   if (!email) {
@@ -12,12 +12,12 @@ router.post('/subscribe', (req, res) => {
   }
 
   try {
-    const existing = db.prepare('SELECT id FROM newsletter_subscribers WHERE email = ?').get(email.toLowerCase());
+    const existing = await db.prepare('SELECT id FROM newsletter_subscribers WHERE email = ?').get(email.toLowerCase());
     if (existing) {
       return res.status(200).json({ message: 'You are already subscribed to our newsletter!' });
     }
 
-    db.prepare('INSERT INTO newsletter_subscribers (email) VALUES (?)').run(email.toLowerCase());
+    await db.prepare('INSERT INTO newsletter_subscribers (email) VALUES (?)').run(email.toLowerCase());
     res.status(201).json({ message: 'Thank you for subscribing to our newsletter!' });
   } catch (error) {
     res.status(500).json({ error: 'Server error. Failed to subscribe.' });
@@ -25,9 +25,9 @@ router.post('/subscribe', (req, res) => {
 });
 
 // GET /api/newsletter/subscribers - Get list of subscribers (Admin Only)
-router.get('/subscribers', authenticate, adminOnly, (req, res) => {
+router.get('/subscribers', authenticate, adminOnly, async (req, res) => {
   try {
-    const subscribers = db.prepare('SELECT * FROM newsletter_subscribers ORDER BY subscribed_at DESC').all();
+    const subscribers = await db.prepare('SELECT * FROM newsletter_subscribers ORDER BY subscribed_at DESC').all();
     res.json(subscribers);
   } catch (error) {
     res.status(500).json({ error: 'Server error. Failed to retrieve subscribers.' });

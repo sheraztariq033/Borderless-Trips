@@ -4,7 +4,7 @@ const db = require('../models/database');
 const { authenticate, adminOnly } = require('../middleware/auth');
 
 // GET /api/countries - Public list of active countries
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { region } = req.query;
     let query = 'SELECT * FROM countries WHERE active = 1';
@@ -14,7 +14,7 @@ router.get('/', (req, res) => {
       params.push(region);
     }
     query += ' ORDER BY name ASC';
-    const countries = db.prepare(query).all(...params);
+    const countries = await db.prepare(query).all(...params);
     res.json(countries);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch countries.' });
@@ -22,11 +22,11 @@ router.get('/', (req, res) => {
 });
 
 // POST /api/countries - Add country (Admin)
-router.post('/', authenticate, adminOnly, (req, res) => {
+router.post('/', authenticate, adminOnly, async (req, res) => {
   const { name, code, region, visa_required } = req.body;
   if (!name) return res.status(400).json({ error: 'Country name is required.' });
   try {
-    db.prepare('INSERT INTO countries (name, code, region, visa_required, active) VALUES (?, ?, ?, ?, 1)')
+    await db.prepare('INSERT INTO countries (name, code, region, visa_required, active) VALUES (?, ?, ?, ?, 1)')
       .run(name, code || '', region || 'europe', visa_required !== undefined ? (visa_required ? 1 : 0) : 1);
     res.status(201).json({ message: 'Country added successfully.' });
   } catch (error) {
@@ -38,13 +38,13 @@ router.post('/', authenticate, adminOnly, (req, res) => {
 });
 
 // PUT /api/countries/:id - Update country (Admin)
-router.put('/:id', authenticate, adminOnly, (req, res) => {
+router.put('/:id', authenticate, adminOnly, async (req, res) => {
   const { id } = req.params;
   const { name, code, region, visa_required, active } = req.body;
   try {
-    const country = db.prepare('SELECT id FROM countries WHERE id = ?').get(id);
+    const country = await db.prepare('SELECT id FROM countries WHERE id = ?').get(id);
     if (!country) return res.status(404).json({ error: 'Country not found.' });
-    db.prepare(`
+    await db.prepare(`
       UPDATE countries SET
         name = COALESCE(?, name), code = COALESCE(?, code),
         region = COALESCE(?, region), visa_required = COALESCE(?, visa_required),
@@ -58,10 +58,10 @@ router.put('/:id', authenticate, adminOnly, (req, res) => {
 });
 
 // DELETE /api/countries/:id - Deactivate country (Admin)
-router.delete('/:id', authenticate, adminOnly, (req, res) => {
+router.delete('/:id', authenticate, adminOnly, async (req, res) => {
   const { id } = req.params;
   try {
-    db.prepare('UPDATE countries SET active = 0 WHERE id = ?').run(id);
+    await db.prepare('UPDATE countries SET active = 0 WHERE id = ?').run(id);
     res.json({ message: 'Country deactivated.' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to deactivate country.' });
