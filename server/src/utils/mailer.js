@@ -4,7 +4,7 @@ const db = require('../models/database');
 // Helper to load settings from DB in real time
 function getSMTPSettings() {
   try {
-    const rows = db.prepare('SELECT key, value FROM settings WHERE key LIKE "smtp_%"').all();
+    const rows = db.prepare("SELECT key, value FROM settings WHERE key LIKE 'smtp_%'").all();
     const settings = {};
     rows.forEach(r => { settings[r.key] = r.value; });
     return settings;
