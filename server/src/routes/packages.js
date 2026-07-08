@@ -14,7 +14,7 @@ const parseArray = (str) => {
 };
 
 // GET /api/packages - get all packages (with filters for search/duration/price/type)
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const { search, destination, minPrice, maxPrice, type, featured } = req.query;
   
   let query = 'SELECT * FROM packages WHERE active = 1';
@@ -51,7 +51,7 @@ router.get('/', (req, res) => {
   }
 
   try {
-    const packages = db.prepare(query).all(...params);
+    const packages = await db.prepare(query).all(...params);
     // Parse JSON fields
     const formatted = packages.map(pkg => ({
       ...pkg,
@@ -70,10 +70,10 @@ router.get('/', (req, res) => {
 });
 
 // GET /api/packages/:id - get package by ID
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    const pkg = db.prepare('SELECT * FROM packages WHERE id = ? AND active = 1').get(id);
+    const pkg = await db.prepare('SELECT * FROM packages WHERE id = ? AND active = 1').get(id);
     if (!pkg) {
       return res.status(404).json({ error: 'Package not found.' });
     }
@@ -94,7 +94,7 @@ router.get('/:id', (req, res) => {
 });
 
 // POST /api/packages - Create package (Admin Only)
-router.post('/', authenticate, adminOnly, (req, res) => {
+router.post('/', authenticate, adminOnly, async (req, res) => {
   const {
     title, destination, description, duration, price, original_price,
     type, images, itinerary, includes, excludes, featured
@@ -105,7 +105,7 @@ router.post('/', authenticate, adminOnly, (req, res) => {
   }
 
   try {
-    const result = db.prepare(`
+    const result = await db.prepare(`
       INSERT INTO packages (
         title, destination, description, duration, price, original_price,
         type, images, itinerary, includes, excludes, featured
@@ -132,7 +132,7 @@ router.post('/', authenticate, adminOnly, (req, res) => {
 });
 
 // PUT /api/packages/:id - Update package (Admin Only)
-router.put('/:id', authenticate, adminOnly, (req, res) => {
+router.put('/:id', authenticate, adminOnly, async (req, res) => {
   const { id } = req.params;
   const {
     title, destination, description, duration, price, original_price,
@@ -140,12 +140,12 @@ router.put('/:id', authenticate, adminOnly, (req, res) => {
   } = req.body;
 
   try {
-    const pkg = db.prepare('SELECT id FROM packages WHERE id = ?').get(id);
+    const pkg = await db.prepare('SELECT id FROM packages WHERE id = ?').get(id);
     if (!pkg) {
       return res.status(404).json({ error: 'Package not found.' });
     }
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE packages SET
         title = COALESCE(?, title),
         destination = COALESCE(?, destination),
@@ -185,15 +185,15 @@ router.put('/:id', authenticate, adminOnly, (req, res) => {
 });
 
 // DELETE /api/packages/:id - soft delete package (Admin Only)
-router.delete('/:id', authenticate, adminOnly, (req, res) => {
+router.delete('/:id', authenticate, adminOnly, async (req, res) => {
   const { id } = req.params;
   try {
-    const pkg = db.prepare('SELECT id FROM packages WHERE id = ?').get(id);
+    const pkg = await db.prepare('SELECT id FROM packages WHERE id = ?').get(id);
     if (!pkg) {
       return res.status(404).json({ error: 'Package not found.' });
     }
 
-    db.prepare('UPDATE packages SET active = 0 WHERE id = ?').run(id);
+    await db.prepare('UPDATE packages SET active = 0 WHERE id = ?').run(id);
     res.json({ message: 'Package deleted successfully.' });
   } catch (error) {
     res.status(500).json({ error: 'Server error. Failed to delete package.' });

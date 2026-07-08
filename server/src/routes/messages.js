@@ -4,11 +4,11 @@ const db = require('../models/database');
 const { authenticate, adminOnly } = require('../middleware/auth');
 
 // GET /api/messages - Get messages for current user (customer sees own, admin sees all or filtered)
-router.get('/', authenticate, (req, res) => {
+router.get('/', authenticate, async (req, res) => {
   try {
     if (req.user.role === 'admin') {
       if (req.user.sub_role === 'agent') {
-        const assignedUserRows = db.prepare(`
+        const assignedUserRows = await db.prepare(`
           SELECT DISTINCT id as user_id FROM users WHERE assigned_to = ?
           UNION
           SELECT DISTINCT user_id FROM visa_applications WHERE assigned_to = ? AND user_id IS NOT NULL
@@ -27,7 +27,7 @@ router.get('/', authenticate, (req, res) => {
           if (!assignedUserIds.includes(parseInt(userId))) {
             return res.status(403).json({ error: 'Access denied. Client conversation not assigned to you.' });
           }
-          const messages = db.prepare(
+          const messages = await db.prepare(
             'SELECT * FROM messages WHERE user_id = ? ORDER BY created_at ASC'
           ).all(userId);
           return res.json(messages);
@@ -38,7 +38,7 @@ router.get('/', authenticate, (req, res) => {
         }
         
         const placeholders = assignedUserIds.map(() => '?').join(',');
-        const conversations = db.prepare(`
+        const conversations = await db.prepare(`
           SELECT m.user_id, u.name, u.email, u.assigned_to, a.name as assigned_name, m.message as last_message, m.created_at as last_time,
             (SELECT COUNT(*) FROM messages WHERE user_id = m.user_id AND sender = 'customer' AND is_read = 0) as unread
           FROM messages m
@@ -54,13 +54,13 @@ router.get('/', authenticate, (req, res) => {
       // Admin can filter by user_id query param, or get all unique conversations
       const userId = req.query.user_id;
       if (userId) {
-        const messages = db.prepare(
+        const messages = await db.prepare(
           'SELECT * FROM messages WHERE user_id = ? ORDER BY created_at ASC'
         ).all(userId);
         return res.json(messages);
       }
       // Return list of conversations (grouped by user_id with latest message)
-      const conversations = db.prepare(`
+      const conversations = await db.prepare(`
         SELECT m.user_id, u.name, u.email, u.assigned_to, a.name as assigned_name, m.message as last_message, m.created_at as last_time,
           (SELECT COUNT(*) FROM messages WHERE user_id = m.user_id AND sender = 'customer' AND is_read = 0) as unread
         FROM messages m
@@ -71,7 +71,7 @@ router.get('/', authenticate, (req, res) => {
       `).all();
       return res.json(conversations);
     } else {
-      const messages = db.prepare(
+      const messages = await db.prepare(
         'SELECT * FROM messages WHERE user_id = ? ORDER BY created_at ASC'
       ).all(req.user.id);
       return res.json(messages);
@@ -83,7 +83,7 @@ router.get('/', authenticate, (req, res) => {
 });
 
 // POST /api/messages - Send a message
-router.post('/', authenticate, (req, res) => {
+router.post('/', authenticate, async (req, res) => {
   const { message, user_id } = req.body;
 
   if (!message || !message.trim()) {
@@ -106,22 +106,22 @@ router.post('/', authenticate, (req, res) => {
       sender = 'customer';
     }
 
-    db.prepare(
+    await db.prepare(
       'INSERT INTO messages (user_id, sender, message) VALUES (?, ?, ?)'
     ).run(targetUserId, sender, message.trim());
 
     // Create a notification for the recipient
     if (sender === 'customer') {
       // Notify all admins
-      const admins = db.prepare("SELECT id FROM users WHERE role = 'admin'").all();
+      const admins = await db.prepare("SELECT id FROM users WHERE role = 'admin'").all();
       for (const admin of admins) {
-        db.prepare(
+        await db.prepare(
           "INSERT INTO notifications (user_id, title, message, type, link) VALUES (?, ?, ?, 'message', '/admin')"
         ).run(admin.id, `New message from ${req.user.name}`, message.trim().substring(0, 100));
       }
     } else {
       // Notify customer
-      db.prepare(
+      await db.prepare(
         "INSERT INTO notifications (user_id, title, message, type, link) VALUES (?, ?, ?, 'message', '/portal')"
       ).run(targetUserId, 'New message from Borderless Trips', message.trim().substring(0, 100));
     }
@@ -134,16 +134,16 @@ router.post('/', authenticate, (req, res) => {
 });
 
 // PUT /api/messages/read - Mark messages as read
-router.put('/read', authenticate, (req, res) => {
+router.put('/read', authenticate, async (req, res) => {
   const { user_id } = req.body;
 
   try {
     if (req.user.role === 'admin' && user_id) {
       // Admin marking customer messages as read
-      db.prepare("UPDATE messages SET is_read = 1 WHERE user_id = ? AND sender = 'customer'").run(user_id);
+      await db.prepare("UPDATE messages SET is_read = 1 WHERE user_id = ? AND sender = 'customer'").run(user_id);
     } else {
       // Customer marking admin messages as read
-      db.prepare("UPDATE messages SET is_read = 1 WHERE user_id = ? AND sender = 'admin'").run(req.user.id);
+      await db.prepare("UPDATE messages SET is_read = 1 WHERE user_id = ? AND sender = 'admin'").run(req.user.id);
     }
     res.json({ message: 'Messages marked as read.' });
   } catch (error) {
@@ -152,12 +152,12 @@ router.put('/read', authenticate, (req, res) => {
 });
 
 // GET /api/messages/unread-count - Get unread message count
-router.get('/unread-count', authenticate, (req, res) => {
+router.get('/unread-count', authenticate, async (req, res) => {
   try {
     let count;
     if (req.user.role === 'admin') {
       if (req.user.sub_role === 'agent') {
-        const assignedUserRows = db.prepare(`
+        const assignedUserRows = await db.prepare(`
           SELECT DISTINCT id as user_id FROM users WHERE assigned_to = ?
           UNION
           SELECT DISTINCT user_id FROM visa_applications WHERE assigned_to = ? AND user_id IS NOT NULL
@@ -173,17 +173,20 @@ router.get('/unread-count', authenticate, (req, res) => {
           count = 0;
         } else {
           const placeholders = assignedUserIds.map(() => '?').join(',');
-          count = db.prepare(`
+          const countRow = await db.prepare(`
             SELECT COUNT(*) as count 
             FROM messages 
             WHERE sender = 'customer' AND is_read = 0 AND user_id IN (${placeholders})
-          `).get(...assignedUserIds).count;
+          `).get(...assignedUserIds);
+          count = countRow ? parseInt(countRow.count || '0') : 0;
         }
       } else {
-        count = db.prepare("SELECT COUNT(*) as count FROM messages WHERE sender = 'customer' AND is_read = 0").get().count;
+        const countRow = await db.prepare("SELECT COUNT(*) as count FROM messages WHERE sender = 'customer' AND is_read = 0").get();
+        count = countRow ? parseInt(countRow.count || '0') : 0;
       }
     } else {
-      count = db.prepare("SELECT COUNT(*) as count FROM messages WHERE user_id = ? AND sender = 'admin' AND is_read = 0").get(req.user.id).count;
+      const countRow = await db.prepare("SELECT COUNT(*) as count FROM messages WHERE user_id = ? AND sender = 'admin' AND is_read = 0").get(req.user.id);
+      count = countRow ? parseInt(countRow.count || '0') : 0;
     }
     res.json({ count });
   } catch (error) {

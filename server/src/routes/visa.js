@@ -8,14 +8,15 @@ function generateAppRef() {
   return `VA-${num}`;
 }
 
-function resolveAndLinkTravelers(travelersList) {
+async function resolveAndLinkTravelers(travelersList) {
   if (!travelersList || !Array.isArray(travelersList)) return travelersList;
   const bcrypt = require('bcryptjs');
-  return travelersList.map(t => {
+  
+  const promises = travelersList.map(async (t) => {
     if (t.email && t.email.trim()) {
       const emailLower = t.email.trim().toLowerCase();
       try {
-        const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(emailLower);
+        const existing = await db.prepare('SELECT id FROM users WHERE email = ?').get(emailLower);
         if (existing) {
           t.user_id = existing.id;
         } else {
@@ -25,7 +26,7 @@ function resolveAndLinkTravelers(travelersList) {
           const name = t.name || 'Traveler';
           const phone = t.phone || '';
           const nationality = t.nationality || '';
-          const result = db.prepare(
+          const result = await db.prepare(
             'INSERT INTO users (name, email, password_hash, phone, nationality, role, sub_role) VALUES (?, ?, ?, ?, ?, ?, ?)'
           ).run(name, emailLower, hash, phone, nationality, 'customer', '');
           t.user_id = result.lastInsertRowid;
@@ -36,10 +37,12 @@ function resolveAndLinkTravelers(travelersList) {
     }
     return t;
   });
+  
+  return Promise.all(promises);
 }
 
 // POST /api/visa/apply - Create a visa application
-router.post('/apply', (req, res) => {
+router.post('/apply', async (req, res) => {
   const { name, email, country, nationality, purpose, assessment, documents, travelers, paymentInfo } = req.body;
   
   let userId = null;
@@ -71,7 +74,7 @@ router.post('/apply', (req, res) => {
     const emailLower = email.toLowerCase().trim();
 
     if (!userId) {
-      const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(emailLower);
+      const existing = await db.prepare('SELECT id FROM users WHERE email = ?').get(emailLower);
       if (existing) {
         userId = existing.id;
         userExists = true;
@@ -80,7 +83,7 @@ router.post('/apply', (req, res) => {
         const bcrypt = require('bcryptjs');
         tempPassword = 'welcome123';
         const hash = bcrypt.hashSync(tempPassword, 10);
-        const result = db.prepare(
+        const result = await db.prepare(
           'INSERT INTO users (name, email, password_hash, phone, role, sub_role) VALUES (?, ?, ?, ?, ?, ?)'
         ).run(name, emailLower, hash, '', 'customer', '');
         userId = result.lastInsertRowid;
@@ -91,16 +94,16 @@ router.post('/apply', (req, res) => {
         token = jwt.sign({ id: userId, role: 'customer' }, JWT_SECRET, { expiresIn: '7d' });
       }
     } else {
-      const user = db.prepare('SELECT email FROM users WHERE id = ?').get(userId);
+      const user = await db.prepare('SELECT email FROM users WHERE id = ?').get(userId);
       if (user && user.email.toLowerCase() === emailLower) {
         userExists = true;
       }
     }
 
     const appRef = generateAppRef();
-    const resolvedTravelers = resolveAndLinkTravelers(travelers || []);
+    const resolvedTravelers = await resolveAndLinkTravelers(travelers || []);
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO visa_applications (
         app_ref, user_id, customer_name, customer_email, country, nationality,
         purpose, status, assessment_json, documents_json, notes,
@@ -120,7 +123,7 @@ router.post('/apply', (req, res) => {
       JSON.stringify(paymentInfo || {})
     );
 
-    const application = db.prepare('SELECT * FROM visa_applications WHERE app_ref = ?').get(appRef);
+    const application = await db.prepare('SELECT * FROM visa_applications WHERE app_ref = ?').get(appRef);
 
     res.status(201).json({
       message: 'Visa application submitted successfully.',
@@ -145,20 +148,20 @@ router.post('/apply', (req, res) => {
 });
 
 // GET /api/visa/applications - List visa applications
-router.get('/applications', authenticate, (req, res) => {
+router.get('/applications', authenticate, async (req, res) => {
   try {
     let apps;
     if (req.user.role === 'admin') {
       if (req.user.sub_role === 'agent') {
-        apps = db.prepare('SELECT * FROM visa_applications WHERE assigned_to = ? ORDER BY created_at DESC').all(req.user.id);
+        apps = await db.prepare('SELECT * FROM visa_applications WHERE assigned_to = ? ORDER BY created_at DESC').all(req.user.id);
       } else {
-        apps = db.prepare('SELECT * FROM visa_applications ORDER BY created_at DESC').all();
+        apps = await db.prepare('SELECT * FROM visa_applications ORDER BY created_at DESC').all();
       }
     } else {
       const searchEmail = `%"email":"${req.user.email.toLowerCase()}"%`;
       const searchUserIdNum = `%"user_id":${req.user.id}%`;
       const searchUserIdStr = `%"user_id":"${req.user.id}"%`;
-      apps = db.prepare(`
+      apps = await db.prepare(`
         SELECT * FROM visa_applications 
         WHERE user_id = ? 
            OR customer_email = ? 
@@ -185,10 +188,10 @@ router.get('/applications', authenticate, (req, res) => {
 });
 
 // GET /api/visa/applications/:id - Get single application
-router.get('/applications/:id', authenticate, (req, res) => {
+router.get('/applications/:id', authenticate, async (req, res) => {
   const { id } = req.params;
   try {
-    const app = db.prepare('SELECT * FROM visa_applications WHERE id = ?').get(id);
+    const app = await db.prepare('SELECT * FROM visa_applications WHERE id = ?').get(id);
     if (!app) {
       return res.status(404).json({ error: 'Visa application not found.' });
     }
@@ -226,7 +229,7 @@ router.get('/applications/:id', authenticate, (req, res) => {
 });
 
 // PUT /api/visa/applications/:id - Update application status/documents
-router.put('/applications/:id', authenticate, (req, res) => {
+router.put('/applications/:id', authenticate, async (req, res) => {
   const { id } = req.params;
   const { status, notes, admin_notes, assigned_to, edit_unlocked, signature_link, signature_doc, signed_document_url, invoice_url } = req.body;
   const travelers = req.body.travelers !== undefined ? req.body.travelers : req.body.travelers_json;
@@ -236,7 +239,7 @@ router.put('/applications/:id', authenticate, (req, res) => {
   const paymentProof = req.body.paymentProof !== undefined ? req.body.paymentProof : req.body.payment_proof;
 
   try {
-    const app = db.prepare('SELECT * FROM visa_applications WHERE id = ?').get(id);
+    const app = await db.prepare('SELECT * FROM visa_applications WHERE id = ?').get(id);
     if (!app) {
       return res.status(404).json({ error: 'Visa application not found.' });
     }
@@ -248,10 +251,10 @@ router.put('/applications/:id', authenticate, (req, res) => {
       
       let resolvedTravelers = null;
       if (travelers) {
-        resolvedTravelers = resolveAndLinkTravelers(travelers);
+        resolvedTravelers = await resolveAndLinkTravelers(travelers);
       }
 
-      db.prepare(`
+      await db.prepare(`
         UPDATE visa_applications SET
           status = COALESCE(?, status),
           notes = COALESCE(?, notes),
@@ -330,23 +333,23 @@ router.put('/applications/:id', authenticate, (req, res) => {
       }
 
       if (documents) {
-        db.prepare('UPDATE visa_applications SET documents_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+        await db.prepare('UPDATE visa_applications SET documents_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
           .run(JSON.stringify(documents), id);
       }
       if (travelers) {
-        const resolved = resolveAndLinkTravelers(travelers);
-        db.prepare('UPDATE visa_applications SET travelers_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+        const resolved = await resolveAndLinkTravelers(travelers);
+        await db.prepare('UPDATE visa_applications SET travelers_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
           .run(JSON.stringify(resolved), id);
       }
       if (req.body.signed_document_url !== undefined) {
-        db.prepare('UPDATE visa_applications SET signed_document_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+        await db.prepare('UPDATE visa_applications SET signed_document_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
           .run(req.body.signed_document_url, id);
       }
       if (paymentProof) {
-         db.prepare('UPDATE visa_applications SET payment_proof = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(paymentProof, id);
+         await db.prepare('UPDATE visa_applications SET payment_proof = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(paymentProof, id);
       }
       if (comments) {
-         db.prepare('UPDATE visa_applications SET comments_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(JSON.stringify(comments), id);
+         await db.prepare('UPDATE visa_applications SET comments_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(JSON.stringify(comments), id);
       }
     }
 

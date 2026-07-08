@@ -3,13 +3,14 @@ const router = express.Router();
 const db = require('../models/database');
 const { authenticate, adminOnly } = require('../middleware/auth');
 
+// Refactored generator to avoid name collision
 function generateRef() {
   const num = Math.floor(100000 + Math.random() * 900000);
   return `SR-${num}`;
 }
 
 // POST /api/service-requests - Create a service request (public or auth)
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const { name, email, phone, service_type, country, details, create_account, password } = req.body;
 
   if (!name || !email || !service_type) {
@@ -41,7 +42,7 @@ router.post('/', (req, res) => {
   }
 
   try {
-    const existingUser = db.prepare('SELECT id, role FROM users WHERE email = ?').get(email.toLowerCase());
+    const existingUser = await db.prepare('SELECT id, role FROM users WHERE email = ?').get(email.toLowerCase());
     
     if (existingUser) {
       if (!userId) {
@@ -56,7 +57,7 @@ router.post('/', (req, res) => {
       tempPassword = password || `BT-${Math.floor(100000 + Math.random() * 900000)}`;
       const hash = bcrypt.hashSync(tempPassword, 10);
       
-      const userResult = db.prepare(
+      const userResult = await db.prepare(
         'INSERT INTO users (name, email, password_hash, phone, nationality, role, sub_role) VALUES (?, ?, ?, ?, ?, ?, ?)'
       ).run(name, email.toLowerCase(), hash, phone || '', '', 'customer', '');
       
@@ -66,12 +67,12 @@ router.post('/', (req, res) => {
     }
 
     const ref = generateRef();
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO service_requests (ref, user_id, name, email, phone, service_type, country, details_json, status, priority, admin_notes)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new', 'normal', '')
     `).run(ref, userId, name, email.toLowerCase(), phone || '', service_type, country || '', JSON.stringify(details || {}));
 
-    const request = db.prepare('SELECT * FROM service_requests WHERE ref = ?').get(ref);
+    const request = await db.prepare('SELECT * FROM service_requests WHERE ref = ?').get(ref);
     
     // Send email notifications asynchronously
     const { sendWelcomeEmail, sendRequestConfirmation, sendAdminAlert } = require('../utils/mailer');
@@ -95,7 +96,7 @@ router.post('/', (req, res) => {
 });
 
 // GET /api/service-requests - List requests
-router.get('/', authenticate, (req, res) => {
+router.get('/', authenticate, async (req, res) => {
   try {
     const { status, service_type, priority, page = 1, limit = 25, search } = req.query;
 
@@ -118,18 +119,19 @@ router.get('/', authenticate, (req, res) => {
       
       // Count total
       const countQuery = query.replace('SELECT sr.*, u.name as assigned_name', 'SELECT COUNT(*) as total');
-      const total = db.prepare(countQuery).get(...params).total;
+      const totalRow = await db.prepare(countQuery).get(...params);
+      const total = totalRow ? parseInt(totalRow.total || '0') : 0;
 
       query += ' ORDER BY sr.created_at DESC';
       const offset = (parseInt(page) - 1) * parseInt(limit);
       query += ` LIMIT ${parseInt(limit)} OFFSET ${offset}`;
 
-      const requests = db.prepare(query).all(...params);
+      const requests = await db.prepare(query).all(...params);
       const formatted = requests.map(r => ({ ...r, details_json: JSON.parse(r.details_json || '{}') }));
 
       res.json({ requests: formatted, total, page: parseInt(page), totalPages: Math.ceil(total / parseInt(limit)) });
     } else {
-      const requests = db.prepare(
+      const requests = await db.prepare(
         'SELECT * FROM service_requests WHERE user_id = ? OR email = ? ORDER BY created_at DESC'
       ).all(req.user.id, req.user.email);
       const formatted = requests.map(r => ({ ...r, details_json: JSON.parse(r.details_json || '{}') }));
@@ -142,7 +144,7 @@ router.get('/', authenticate, (req, res) => {
 });
 
 // GET /api/service-requests/stats - Dashboard stats for service requests
-router.get('/stats', authenticate, adminOnly, (req, res) => {
+router.get('/stats', authenticate, adminOnly, async (req, res) => {
   try {
     const isAgent = req.user.sub_role === 'agent';
     const agentId = req.user.id;
@@ -166,11 +168,11 @@ router.get('/stats', authenticate, adminOnly, (req, res) => {
       ? "SELECT COUNT(*) as c FROM service_requests WHERE assigned_to = ?" 
       : "SELECT COUNT(*) as c FROM service_requests";
     const todayQuery = isAgent 
-      ? "SELECT COUNT(*) as c FROM service_requests WHERE DATE(created_at) = DATE('now') AND assigned_to = ?" 
-      : "SELECT COUNT(*) as c FROM service_requests WHERE DATE(created_at) = DATE('now')";
+      ? "SELECT COUNT(*) as c FROM service_requests WHERE created_at::date = CURRENT_DATE AND assigned_to = ?" 
+      : "SELECT COUNT(*) as c FROM service_requests WHERE created_at::date = CURRENT_DATE";
     const thisWeekQuery = isAgent 
-      ? "SELECT COUNT(*) as c FROM service_requests WHERE created_at >= DATE('now', '-7 days') AND assigned_to = ?" 
-      : "SELECT COUNT(*) as c FROM service_requests WHERE created_at >= DATE('now', '-7 days')";
+      ? "SELECT COUNT(*) as c FROM service_requests WHERE created_at >= CURRENT_DATE - INTERVAL '7 days' AND assigned_to = ?" 
+      : "SELECT COUNT(*) as c FROM service_requests WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'";
     const byTypeQuery = isAgent 
       ? "SELECT service_type, COUNT(*) as count FROM service_requests WHERE assigned_to = ? GROUP BY service_type" 
       : "SELECT service_type, COUNT(*) as count FROM service_requests GROUP BY service_type";
@@ -179,40 +181,44 @@ router.get('/stats', authenticate, adminOnly, (req, res) => {
       : "SELECT COUNT(*) as c FROM service_requests WHERE priority = 'urgent' AND status NOT IN ('completed','rejected')";
 
     const params = isAgent ? [agentId] : [];
-    const runQuery = (q) => db.prepare(q).get(...params).c;
+    const runQuery = async (q) => {
+      const row = await db.prepare(q).get(...params);
+      return row ? parseInt(row.c || '0') : 0;
+    };
 
     const stats = {
-      new: runQuery(newQuery),
-      accepted: runQuery(acceptedQuery),
-      in_progress: runQuery(inProgressQuery),
-      completed: runQuery(completedQuery),
-      rejected: runQuery(rejectedQuery),
-      total: runQuery(totalQuery),
-      today: runQuery(todayQuery),
-      thisWeek: runQuery(thisWeekQuery),
-      byType: isAgent ? db.prepare(byTypeQuery).all(agentId) : db.prepare(byTypeQuery).all(),
-      urgent: runQuery(urgentQuery),
+      new: await runQuery(newQuery),
+      accepted: await runQuery(acceptedQuery),
+      in_progress: await runQuery(inProgressQuery),
+      completed: await runQuery(completedQuery),
+      rejected: await runQuery(rejectedQuery),
+      total: await runQuery(totalQuery),
+      today: await runQuery(todayQuery),
+      thisWeek: await runQuery(thisWeekQuery),
+      byType: isAgent ? await db.prepare(byTypeQuery).all(agentId) : await db.prepare(byTypeQuery).all(),
+      urgent: await runQuery(urgentQuery),
     };
     res.json(stats);
   } catch (error) {
+    console.error('Stats query error:', error);
     res.status(500).json({ error: 'Failed to get service request stats.' });
   }
 });
 
 // PUT /api/service-requests/:id - Update service request (Admin)
-router.put('/:id', authenticate, adminOnly, (req, res) => {
+router.put('/:id', authenticate, adminOnly, async (req, res) => {
   const { id } = req.params;
   const { status, priority, assigned_to, admin_notes } = req.body;
 
   try {
-    const request = db.prepare('SELECT * FROM service_requests WHERE id = ?').get(id);
+    const request = await db.prepare('SELECT * FROM service_requests WHERE id = ?').get(id);
     if (!request) return res.status(404).json({ error: 'Service request not found.' });
 
     if (req.user.sub_role === 'agent' && request.assigned_to !== req.user.id && req.body.assigned_to === undefined) {
       return res.status(403).json({ error: 'Access denied. Case not assigned to you.' });
     }
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE service_requests SET
         status = COALESCE(?, status),
         priority = COALESCE(?, priority),
@@ -226,7 +232,7 @@ router.put('/:id', authenticate, adminOnly, (req, res) => {
     if (status && request.user_id) {
       const statusLabels = { accepted: 'Accepted', in_progress: 'In Progress', completed: 'Completed', rejected: 'Rejected' };
       if (statusLabels[status]) {
-        db.prepare(
+        await db.prepare(
           'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)'
         ).run(
           request.user_id,
@@ -259,10 +265,10 @@ router.put('/:id', authenticate, adminOnly, (req, res) => {
 });
 
 // DELETE /api/service-requests/:id - Delete (Admin or Owner if pending)
-router.delete('/:id', authenticate, (req, res) => {
+router.delete('/:id', authenticate, async (req, res) => {
   const { id } = req.params;
   try {
-    const request = db.prepare('SELECT id, user_id, status FROM service_requests WHERE id = ?').get(id);
+    const request = await db.prepare('SELECT id, user_id, status FROM service_requests WHERE id = ?').get(id);
     if (!request) return res.status(404).json({ error: 'Service request not found.' });
     
     // Check permission: admin, or client owner when request is still pending
@@ -273,7 +279,7 @@ router.delete('/:id', authenticate, (req, res) => {
       return res.status(403).json({ error: 'Access denied. You can only delete pending requests that you created.' });
     }
     
-    db.prepare('DELETE FROM service_requests WHERE id = ?').run(id);
+    await db.prepare('DELETE FROM service_requests WHERE id = ?').run(id);
     res.json({ message: 'Service request deleted.' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete service request.' });
@@ -281,11 +287,11 @@ router.delete('/:id', authenticate, (req, res) => {
 });
 
 // POST /api/service-requests/:id/convert - Convert service request to booking or visa application (Admin Only)
-router.post('/:id/convert', authenticate, adminOnly, (req, res) => {
+router.post('/:id/convert', authenticate, adminOnly, async (req, res) => {
   const { id } = req.params;
 
   try {
-    const sr = db.prepare('SELECT * FROM service_requests WHERE id = ?').get(id);
+    const sr = await db.prepare('SELECT * FROM service_requests WHERE id = ?').get(id);
     if (!sr) {
       return res.status(404).json({ error: 'Service request not found.' });
     }
@@ -297,7 +303,7 @@ router.post('/:id/convert', authenticate, adminOnly, (req, res) => {
     // Check if the customer user exists or create a temp customer if needed
     let userId = sr.user_id;
     if (!userId) {
-      const user = db.prepare('SELECT id FROM users WHERE email = ?').get(sr.email.toLowerCase());
+      const user = await db.prepare('SELECT id FROM users WHERE email = ?').get(sr.email.toLowerCase());
       if (user) {
         userId = user.id;
       } else {
@@ -305,7 +311,7 @@ router.post('/:id/convert', authenticate, adminOnly, (req, res) => {
         const bcrypt = require('bcryptjs');
         const tempPassword = 'welcome' + Math.floor(1000 + Math.random() * 9000);
         const hash = bcrypt.hashSync(tempPassword, 10);
-        const userInsert = db.prepare(`
+        const userInsert = await db.prepare(`
           INSERT INTO users (name, email, password_hash, phone, role, status)
           VALUES (?, ?, ?, ?, 'customer', 'active')
         `).run(sr.name, sr.email.toLowerCase(), hash, sr.phone || '');
@@ -327,7 +333,7 @@ router.post('/:id/convert', authenticate, adminOnly, (req, res) => {
         details = JSON.parse(sr.details_json || '{}');
       } catch (e) {}
 
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO visa_applications (
           app_ref, user_id, customer_name, customer_email, customer_phone, country, nationality,
           purpose, status, assessment_json, documents_json, notes, admin_notes, assigned_to,
@@ -366,7 +372,7 @@ router.post('/:id/convert', authenticate, adminOnly, (req, res) => {
       let travelDate = details.travel_date || details.depart_date || '';
       let travelers = details.travelers || details.passengers || 1;
 
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO bookings (
           booking_ref, user_id, package_id, package_title, customer_name, customer_email, customer_phone,
           travel_date, travelers, total_price, status, payment_status, notes, admin_notes, assigned_to
@@ -392,7 +398,7 @@ router.post('/:id/convert', authenticate, adminOnly, (req, res) => {
 
     // Update the service request status to completed and log the conversion reference
     const updatedNotes = `${sr.admin_notes || ''}\n[System] Converted to ${targetRef} on ${new Date().toLocaleDateString()}`.trim();
-    db.prepare("UPDATE service_requests SET status = 'completed', admin_notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+    await db.prepare("UPDATE service_requests SET status = 'completed', admin_notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
       .run(updatedNotes, id);
 
     res.json({ message: resultMsg, targetRef, status: 'completed' });
@@ -404,4 +410,3 @@ router.post('/:id/convert', authenticate, adminOnly, (req, res) => {
 });
 
 module.exports = router;
-

@@ -4,7 +4,7 @@ const db = require('../models/database');
 const { authenticate, adminOnly } = require('../middleware/auth');
 
 // POST /api/flights/request - Create a flight request
-router.post('/request', (req, res) => {
+router.post('/request', async (req, res) => {
   const { fromCity, toCity, departDate, returnDate, passengers, flightClass, tripType, name, email, phone } = req.body;
 
   let userId = null;
@@ -20,7 +20,7 @@ router.post('/request', (req, res) => {
       const { JWT_SECRET } = require('../middleware/auth');
       const decoded = jwt.verify(token, JWT_SECRET);
       userId = decoded.id;
-      const user = db.prepare('SELECT name, email, phone FROM users WHERE id = ?').get(userId);
+      const user = await db.prepare('SELECT name, email, phone FROM users WHERE id = ?').get(userId);
       if (user) {
         customerName = customerName || user.name;
         customerEmail = customerEmail || user.email;
@@ -41,7 +41,7 @@ router.post('/request', (req, res) => {
     const emailLower = customerEmail.toLowerCase().trim();
 
     if (!userId && emailLower) {
-      const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(emailLower);
+      const existing = await db.prepare('SELECT id FROM users WHERE email = ?').get(emailLower);
       if (existing) {
         userId = existing.id;
         userExists = true;
@@ -50,7 +50,7 @@ router.post('/request', (req, res) => {
         const bcrypt = require('bcryptjs');
         tempPassword = 'welcome123';
         const hash = bcrypt.hashSync(tempPassword, 10);
-        const result = db.prepare(
+        const result = await db.prepare(
           'INSERT INTO users (name, email, password_hash, phone, role, sub_role) VALUES (?, ?, ?, ?, ?, ?)'
         ).run(customerName || 'Flight Customer', emailLower, hash, customerPhone || '', 'customer', '');
         userId = result.lastInsertRowid;
@@ -62,7 +62,7 @@ router.post('/request', (req, res) => {
       }
     }
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO flight_requests (user_id, customer_name, customer_email, customer_phone, from_city, to_city, depart_date, return_date, passengers, class, trip_type, status, admin_notes)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', '')
     `).run(userId, customerName, emailLower, customerPhone, fromCity, toCity, departDate, returnDate || null, parseInt(passengers) || 1, flightClass || 'economy', tripType || 'return');
@@ -82,11 +82,11 @@ router.post('/request', (req, res) => {
 });
 
 // GET /api/flights/requests - Get all requests (Admin Only)
-router.get('/requests', authenticate, adminOnly, (req, res) => {
+router.get('/requests', authenticate, adminOnly, async (req, res) => {
   try {
     let requests;
     if (req.user.sub_role === 'agent') {
-      requests = db.prepare(`
+      requests = await db.prepare(`
         SELECT fr.*, u.name as assigned_name 
         FROM flight_requests fr 
         LEFT JOIN users u ON fr.assigned_to = u.id 
@@ -94,7 +94,7 @@ router.get('/requests', authenticate, adminOnly, (req, res) => {
         ORDER BY fr.created_at DESC
       `).all(req.user.id);
     } else {
-      requests = db.prepare(`
+      requests = await db.prepare(`
         SELECT fr.*, u.name as assigned_name 
         FROM flight_requests fr 
         LEFT JOIN users u ON fr.assigned_to = u.id 
@@ -108,19 +108,19 @@ router.get('/requests', authenticate, adminOnly, (req, res) => {
 });
 
 // PUT /api/flights/requests/:id - Update flight request (Admin Only)
-router.put('/requests/:id', authenticate, adminOnly, (req, res) => {
+router.put('/requests/:id', authenticate, adminOnly, async (req, res) => {
   const { id } = req.params;
   const { status, admin_notes, assigned_to } = req.body;
 
   try {
-    const request = db.prepare('SELECT id, assigned_to FROM flight_requests WHERE id = ?').get(id);
+    const request = await db.prepare('SELECT id, assigned_to FROM flight_requests WHERE id = ?').get(id);
     if (!request) return res.status(404).json({ error: 'Flight request not found.' });
 
     if (req.user.sub_role === 'agent' && request.assigned_to !== req.user.id && req.body.assigned_to === undefined) {
       return res.status(403).json({ error: 'Access denied. Case not assigned to you.' });
     }
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE flight_requests SET 
         status = COALESCE(?, status), 
         admin_notes = COALESCE(?, admin_notes),
@@ -134,9 +134,9 @@ router.put('/requests/:id', authenticate, adminOnly, (req, res) => {
 });
 
 // GET /api/flights/rates - Get all flight rates (Public)
-router.get('/rates', (req, res) => {
+router.get('/rates', async (req, res) => {
   try {
-    const rates = db.prepare('SELECT * FROM flight_rates ORDER BY created_at DESC').all();
+    const rates = await db.prepare('SELECT * FROM flight_rates ORDER BY created_at DESC').all();
     res.json(rates);
   } catch (error) {
     res.status(500).json({ error: 'Failed to retrieve flight rates.' });
@@ -144,14 +144,14 @@ router.get('/rates', (req, res) => {
 });
 
 // POST /api/flights/rates - Create a flight rate (Admin Only)
-router.post('/rates', authenticate, adminOnly, (req, res) => {
+router.post('/rates', authenticate, adminOnly, async (req, res) => {
   const { from_city, to_city, price, airline } = req.body;
   if (!from_city || !to_city || !price) {
     return res.status(400).json({ error: 'From city, to city, and price are required.' });
   }
 
   try {
-    const result = db.prepare(
+    const result = await db.prepare(
       'INSERT INTO flight_rates (from_city, to_city, price, airline) VALUES (?, ?, ?, ?)'
     ).run(from_city, to_city, price, airline || 'Multiple Airlines');
     
@@ -168,15 +168,15 @@ router.post('/rates', authenticate, adminOnly, (req, res) => {
 });
 
 // PUT /api/flights/rates/:id - Update a flight rate (Admin Only)
-router.put('/rates/:id', authenticate, adminOnly, (req, res) => {
+router.put('/rates/:id', authenticate, adminOnly, async (req, res) => {
   const { id } = req.params;
   const { from_city, to_city, price, airline } = req.body;
 
   try {
-    const rate = db.prepare('SELECT id FROM flight_rates WHERE id = ?').get(id);
+    const rate = await db.prepare('SELECT id FROM flight_rates WHERE id = ?').get(id);
     if (!rate) return res.status(404).json({ error: 'Flight rate not found.' });
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE flight_rates SET 
         from_city = COALESCE(?, from_city), 
         to_city = COALESCE(?, to_city),
@@ -192,13 +192,13 @@ router.put('/rates/:id', authenticate, adminOnly, (req, res) => {
 });
 
 // DELETE /api/flights/rates/:id - Delete a flight rate (Admin Only)
-router.delete('/rates/:id', authenticate, adminOnly, (req, res) => {
+router.delete('/rates/:id', authenticate, adminOnly, async (req, res) => {
   const { id } = req.params;
   try {
-    const rate = db.prepare('SELECT id FROM flight_rates WHERE id = ?').get(id);
+    const rate = await db.prepare('SELECT id FROM flight_rates WHERE id = ?').get(id);
     if (!rate) return res.status(404).json({ error: 'Flight rate not found.' });
 
-    db.prepare('DELETE FROM flight_rates WHERE id = ?').run(id);
+    await db.prepare('DELETE FROM flight_rates WHERE id = ?').run(id);
     res.json({ message: 'Flight rate deleted.' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete flight rate.' });
