@@ -373,6 +373,7 @@ export default function ClientPortalPage() {
   const { user, logout, updateProfile } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [docSubTab, setDocSubTab] = useState('all');
   const [bookings, setBookings] = useState([]);
   const [visaApps, setVisaApps] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -610,7 +611,145 @@ export default function ClientPortalPage() {
     );
   }
 
+  // Only documents that have actually been uploaded by the user (having a valid URL and filename)
+  const uploadedDocs = visaApps.flatMap(v => 
+    (v.documents_json || []).filter(d => d.url && d.filename).map(d => ({
+      ...d,
+      appRef: v.app_ref,
+      country: v.country,
+      type: 'User Upload'
+    }))
+  );
+
+  // Official Documents provided by the portal (Invoices, Signed Agreements, Templates, Receipts)
+  const officialDocs = [];
+  visaApps.forEach(v => {
+    if (v.invoice_url) {
+      officialDocs.push({
+        id: `inv-${v.id}`,
+        name: 'Official Invoice',
+        filename: `Invoice_${v.app_ref}.pdf`,
+        url: v.invoice_url,
+        appRef: v.app_ref,
+        country: `Visa — ${v.country}`,
+        type: 'Invoice'
+      });
+    }
+    if (v.signature_doc) {
+      officialDocs.push({
+        id: `sig-tmpl-${v.id}`,
+        name: 'Agreement Template',
+        filename: `Agreement_Template_${v.app_ref}.pdf`,
+        url: v.signature_doc,
+        appRef: v.app_ref,
+        country: `Visa — ${v.country}`,
+        type: 'Agreement Template'
+      });
+    }
+    if (v.signed_document_url) {
+      officialDocs.push({
+        id: `sig-signed-${v.id}`,
+        name: 'Signed Agreement',
+        filename: `Signed_Agreement_${v.app_ref}.pdf`,
+        url: v.signed_document_url,
+        appRef: v.app_ref,
+        country: `Visa — ${v.country}`,
+        type: 'Signed Contract'
+      });
+    }
+    if (v.payment_proof) {
+      officialDocs.push({
+        id: `proof-${v.id}`,
+        name: 'Payment Evidence',
+        filename: `Payment_Proof_${v.app_ref}${v.payment_proof.substring(v.payment_proof.lastIndexOf('.')) || '.pdf'}`,
+        url: v.payment_proof,
+        appRef: v.app_ref,
+        country: `Visa — ${v.country}`,
+        type: 'Payment Evidence'
+      });
+    }
+  });
+
+  bookings.forEach(b => {
+    if (b.invoice_url) {
+      officialDocs.push({
+        id: `inv-b-${b.id}`,
+        name: 'Official Invoice',
+        filename: `Invoice_${b.booking_ref}.pdf`,
+        url: b.invoice_url,
+        appRef: b.booking_ref,
+        country: b.package_title || 'Package Booking',
+        type: 'Invoice'
+      });
+    }
+    if (b.signature_doc) {
+      officialDocs.push({
+        id: `sig-tmpl-b-${b.id}`,
+        name: 'Agreement Template',
+        filename: `Agreement_Template_${b.booking_ref}.pdf`,
+        url: b.signature_doc,
+        appRef: b.booking_ref,
+        country: b.package_title || 'Package Booking',
+        type: 'Agreement Template'
+      });
+    }
+    if (b.signed_document_url) {
+      officialDocs.push({
+        id: `sig-signed-b-${b.id}`,
+        name: 'Signed Agreement',
+        filename: `Signed_Agreement_${b.booking_ref}.pdf`,
+        url: b.signed_document_url,
+        appRef: b.booking_ref,
+        country: b.package_title || 'Package Booking',
+        type: 'Signed Contract'
+      });
+    }
+    if (b.payment_proof) {
+      officialDocs.push({
+        id: `proof-b-${b.id}`,
+        name: 'Payment Evidence',
+        filename: `Payment_Proof_${b.booking_ref}${b.payment_proof.substring(b.payment_proof.lastIndexOf('.')) || '.pdf'}`,
+        url: b.payment_proof,
+        appRef: b.booking_ref,
+        country: b.package_title || 'Package Booking',
+        type: 'Payment Evidence'
+      });
+    }
+  });
+
+  const guidebooks = [
+    {
+      id: 'guide-interview',
+      name: 'Schengen Visa Interview Preparation Guide',
+      filename: 'Schengen_Visa_Interview_Preparation_Guide.pdf',
+      url: '/guides/Schengen_Visa_Interview_Preparation_Guide.pdf',
+      appRef: 'N/A',
+      country: 'Schengen Area',
+      type: 'Guide'
+    },
+    {
+      id: 'guide-checklist',
+      name: 'Required Documents Checklist Guide',
+      filename: 'Required_Documents_Checklist_Guide.pdf',
+      url: '/guides/Required_Documents_Checklist_Guide.pdf',
+      appRef: 'N/A',
+      country: 'Schengen Area',
+      type: 'Guide'
+    },
+    {
+      id: 'tmpl-sponsorship',
+      name: 'Sponsorship / Invitation Letter Template',
+      filename: 'Sponsorship_Letter_Template.docx',
+      url: '/guides/Sponsorship_Letter_Template.docx',
+      appRef: 'N/A',
+      country: 'Generic',
+      type: 'Template'
+    }
+  ];
+
+  const totalDocsCount = uploadedDocs.length + officialDocs.length + guidebooks.length;
   const allDocs = visaApps.flatMap(v => (v.documents_json || []).map(d => ({ ...d, appRef: v.app_ref, country: v.country })));
+
   const serviceTypeLabel = (t) => ({ visa:'Visa Service', holiday_package:'Holiday Package', flight:'Flight Booking', hotel:'Hotel Booking', consultation:'Consultation', other:'Other' }[t] || t);
   const serviceTypeIcon = (t) => ({ visa:Shield, holiday_package:Globe, flight:Plane, hotel:Hotel, consultation:Phone, other:HelpCircle }[t] || ClipboardList);
 
@@ -665,7 +804,7 @@ export default function ClientPortalPage() {
                         { label:'Active Bookings', value:bookings.filter(b=>b.status!=='cancelled').length, icon:Package, color:'#0ea5e9' },
                         { label:'Visa Applications', value:visaApps.length, icon:FileText, color:'#d4a574' },
                         { label:'Service Requests', value:serviceRequests.length, icon:ClipboardList, color:'#6366f1' },
-                        { label:'Documents', value:allDocs.length, icon:Upload, color:'#10b981' },
+                        { label:'Documents', value:totalDocsCount, icon:Upload, color:'#10b981' },
                         { label:'Unread Messages', value:unreadMsgs, icon:MessageSquare, color:'#f59e0b' },
                       ].map((s,i) => (
                         <div key={i} className="card" style={{ padding:16, display:'flex', alignItems:'center', gap:14 }}>
@@ -775,6 +914,28 @@ export default function ClientPortalPage() {
                             <button className="btn btn-ghost btn-sm" style={{ color:'var(--color-danger)', fontSize:12 }} onClick={() => handleCancelBooking(b.id)}>Cancel Booking</button>
                           </div>
                         )}
+                        {b.notes && (
+                          <div style={{
+                            background: 'var(--color-bg-alt)',
+                            borderLeft: '4px solid var(--color-primary)',
+                            borderRadius: '0 8px 8px 0',
+                            padding: '14px 16px',
+                            marginTop: 14,
+                            marginBottom: 14,
+                            borderTop: '1px solid var(--color-border)',
+                            borderRight: '1px solid var(--color-border)',
+                            borderBottom: '1px solid var(--color-border)',
+                          }}>
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+                              <Shield size={14} color="var(--color-primary)"/>
+                              <span style={{ fontWeight: 700, fontSize: 12, color: 'var(--color-text)' }}>📌 Special Instructions & Notes</span>
+                            </div>
+                            <p style={{ margin: 0, fontSize: 12, lineHeight: 1.4, color: 'var(--color-text-secondary)', whiteSpace: 'pre-wrap' }}>
+                              {b.notes}
+                            </p>
+                          </div>
+                        )}
+
                         <PortalCaseExtensions item={b} type="booking" loadPortalData={loadPortalData} />
                       </div>
                     )) : (
@@ -838,13 +999,105 @@ export default function ClientPortalPage() {
                                     <div className={`portal-timeline-dot ${done?'done':''} ${isCurrent?'current':''} ${isRejected?'rejected':''}`}>
                                       {done ? '✓' : j + 1}
                                     </div>
-                                    <div style={{ fontSize:11, fontWeight:600, color:done?'var(--color-text)':'var(--color-text-muted)', whiteSpace:'nowrap', marginTop:6 }}>{step}</div>
+                                    <div className="portal-timeline-label" style={{ fontSize:11, fontWeight:600, color:done?'var(--color-text)':'var(--color-text-muted)', whiteSpace:'nowrap', marginTop:6 }}>{step}</div>
                                     {j < steps.length - 1 && <div className={`portal-timeline-line ${done && currentStep > j?'done':''}`}/>}
                                   </div>
                                 );
                               });
                             })()}
                           </div>
+                          
+                          {/* Agent Notes / Interview Scheduled details */}
+                          {v.notes && (
+                            <div style={{
+                              background: v.status === 'interview_scheduled' ? 'rgba(139, 92, 246, 0.05)' : 'var(--color-bg-alt)',
+                              borderLeft: `4px solid ${v.status === 'interview_scheduled' ? '#8b5cf6' : 'var(--color-secondary)'}`,
+                              borderRadius: '0 8px 8px 0',
+                              padding: '16px',
+                              marginTop: 18,
+                              marginBottom: 18,
+                              borderTop: v.status === 'interview_scheduled' ? '1px solid rgba(139, 92, 246, 0.15)' : '1px solid var(--color-border)',
+                              borderRight: v.status === 'interview_scheduled' ? '1px solid rgba(139, 92, 246, 0.15)' : '1px solid var(--color-border)',
+                              borderBottom: v.status === 'interview_scheduled' ? '1px solid rgba(139, 92, 246, 0.15)' : '1px solid var(--color-border)',
+                            }}>
+                              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                                <Calendar size={16} color={v.status === 'interview_scheduled' ? '#8b5cf6' : 'var(--color-secondary)'}/>
+                                <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--color-text)' }}>
+                                  {v.status === 'interview_scheduled' ? '📅 Official Interview Details & Schedule' : '📌 Important Note from your Visa Expert'}
+                                </span>
+                              </div>
+                              <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: 'var(--color-text-secondary)', whiteSpace: 'pre-wrap' }}>
+                                {v.notes}
+                              </p>
+
+                              {v.status === 'interview_scheduled' && (
+                                <div style={{ marginTop: 14, borderTop: '1px solid rgba(139, 92, 246, 0.15)', paddingTop: 12 }}>
+                                  <div style={{ fontSize: 11, fontWeight: 700, color: '#8b5cf6', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                    💡 Preparation Checklist for Your Interview
+                                  </div>
+                                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: 'var(--color-text-secondary)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                    <li>Carry all <strong>physical documents</strong> that you uploaded in the checklist below.</li>
+                                    <li>Bring your <strong>original current Passport</strong> and any previous passports.</li>
+                                    <li>Ensure you have the <strong>printed Visa Application Form</strong> signed.</li>
+                                    <li>Be present at the Embassy/Visa Application Centre at least 15 minutes before your scheduled slot.</li>
+                                    <li>Download and review our interview guide below for common questions and tips.</li>
+                                  </ul>
+                                  <div style={{ marginTop: 12 }}>
+                                    <a href="/guides/Schengen_Visa_Interview_Preparation_Guide.pdf" download target="_blank" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#8b5cf6', color: 'white', border: 'none', padding: '6px 12px', fontSize: 11, borderRadius: 4, cursor: 'pointer' }}>
+                                      <Download size={12}/> Download Interview Prep Guide (PDF)
+                                    </a>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Official Provided Documents section in individual Visa application */}
+                          {(v.invoice_url || v.signature_doc || v.signed_document_url || v.payment_proof) && (
+                            <div style={{ marginTop: 14, background: 'rgba(15, 23, 42, 0.02)', border: '1px solid var(--color-border)', borderRadius: 8, padding: 14 }}>
+                              <h4 style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-secondary)', margin: '0 0 10px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                📂 Official Documents to Download
+                              </h4>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
+                                {v.invoice_url && (
+                                  <a href={v.invoice_url} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm" style={{ justifyContent: 'flex-start', gap: 8, fontSize: 12, padding: '8px 12px', height: 'auto', background: 'var(--color-bg)' }}>
+                                    <FileText size={14} color="#10b981"/>
+                                    <div style={{ textAlign: 'left' }}>
+                                      <div style={{ fontWeight: 600 }}>Official Invoice</div>
+                                      <div style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>Click to View/Download</div>
+                                    </div>
+                                  </a>
+                                )}
+                                {v.signature_doc && (
+                                  <a href={v.signature_doc} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm" style={{ justifyContent: 'flex-start', gap: 8, fontSize: 12, padding: '8px 12px', height: 'auto', background: 'var(--color-bg)' }}>
+                                    <FileText size={14} color="#6366f1"/>
+                                    <div style={{ textAlign: 'left' }}>
+                                      <div style={{ fontWeight: 600 }}>Agreement Template</div>
+                                      <div style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>Click to View/Download</div>
+                                    </div>
+                                  </a>
+                                )}
+                                {v.signed_document_url && (
+                                  <a href={v.signed_document_url} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm" style={{ justifyContent: 'flex-start', gap: 8, fontSize: 12, padding: '8px 12px', height: 'auto', background: 'var(--color-bg)' }}>
+                                    <CheckCircle2 size={14} color="#10b981"/>
+                                    <div style={{ textAlign: 'left' }}>
+                                      <div style={{ fontWeight: 600 }}>Signed Agreement</div>
+                                      <div style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>E-Signed Copy</div>
+                                    </div>
+                                  </a>
+                                )}
+                                {v.payment_proof && (
+                                  <a href={v.payment_proof} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm" style={{ justifyContent: 'flex-start', gap: 8, fontSize: 12, padding: '8px 12px', height: 'auto', background: 'var(--color-bg)' }}>
+                                    <FileText size={14} color="#0ea5e9"/>
+                                    <div style={{ textAlign: 'left' }}>
+                                      <div style={{ fontWeight: 600 }}>Payment Evidence</div>
+                                      <div style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>Uploaded receipt</div>
+                                    </div>
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          )}
 
                           {/* Documents */}
                           <div style={{ marginTop:14, paddingTop:14, borderTop:'1px dashed var(--color-border)' }}>
@@ -919,6 +1172,8 @@ export default function ClientPortalPage() {
                                             display: 'flex', 
                                             justifyContent: 'space-between', 
                                             alignItems: 'center',
+                                            flexWrap: 'wrap',
+                                            gap: '12px',
                                             border: '1px solid rgba(14, 165, 233, 0.15)'
                                           }}>
                                             <div style={{ fontSize: 12 }}>
@@ -976,6 +1231,8 @@ export default function ClientPortalPage() {
                                             display: 'flex', 
                                             justifyContent: 'space-between', 
                                             alignItems: 'center',
+                                            flexWrap: 'wrap',
+                                            gap: '12px',
                                             border: '1px solid var(--color-border)'
                                           }}>
                                             <div style={{ fontSize: 12 }}>
@@ -1330,42 +1587,126 @@ export default function ClientPortalPage() {
                 {activeTab === 'documents' && (
                   <div>
                     <h1 className="heading-2" style={{ marginBottom:24 }}>My Documents</h1>
-                    {allDocs.length > 0 ? (
-                      <div className="card" style={{ overflow:'hidden' }}>
-                        <table style={{ width:'100%', borderCollapse:'collapse' }}>
-                          <thead>
-                            <tr style={{ background:'var(--color-bg)' }}>
-                              {['File Name','Application','Country','Actions'].map(h => (
-                                <th key={h} style={{ padding:'12px 16px', textAlign:'left', fontSize:11, fontWeight:600, color:'var(--color-text-muted)', textTransform:'uppercase' }}>{h}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {allDocs.map((doc,i) => (
-                              <tr key={i} style={{ borderTop:'1px solid var(--color-border)' }}>
-                                <td style={{ padding:'12px 16px', fontSize:13, display:'flex', alignItems:'center', gap:8 }}>
-                                  <FileText size={16} color="#0ea5e9"/> {doc.filename}
-                                </td>
-                                <td style={{ padding:'12px 16px', fontSize:13, fontFamily:'monospace' }}>{doc.appRef}</td>
-                                <td style={{ padding:'12px 16px', fontSize:13 }}>{doc.country}</td>
-                                <td style={{ padding:'12px 16px' }}>
-                                  <a href={doc.url} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm"><Eye size={14}/> View</a>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <div className="card" style={{ padding:50, textAlign:'center', border:'2px dashed var(--color-border)' }}>
-                        <Upload size={48} color="var(--color-text-muted)" style={{ marginBottom:12, opacity:0.3 }}/>
-                        <h3 className="heading-4">No Documents Uploaded</h3>
-                        <p className="text-muted" style={{ fontSize:13, margin:'8px auto 20px', maxWidth:400 }}>
-                          Upload documents from the <strong>Visa Applications</strong> tab.
-                        </p>
-                        <button className="btn btn-outline" onClick={() => setActiveTab('visa')}>Go to Visa Applications</button>
-                      </div>
-                    )}
+                    
+                    {/* Pills Category Filters */}
+                    <div style={{ display: 'flex', gap: 10, marginBottom: 24, flexWrap: 'wrap' }}>
+                      {[
+                        { id: 'all', label: 'All Files', count: totalDocsCount },
+                        { id: 'uploaded', label: 'Uploaded by You', count: uploadedDocs.length },
+                        { id: 'official', label: 'Official Documents', count: officialDocs.length },
+                        { id: 'guides', label: 'Guides & Templates', count: guidebooks.length }
+                      ].map(subTab => (
+                        <button
+                          key={subTab.id}
+                          onClick={() => setDocSubTab(subTab.id)}
+                          style={{
+                            padding: '8px 16px',
+                            borderRadius: '20px',
+                            fontSize: '13px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            border: '1px solid var(--color-border)',
+                            background: docSubTab === subTab.id ? 'var(--color-primary)' : 'var(--color-bg)',
+                            color: docSubTab === subTab.id ? 'white' : 'var(--color-text)',
+                            transition: 'all 0.2s ease',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6
+                          }}
+                        >
+                          <span>{subTab.label}</span>
+                          <span style={{
+                            fontSize: '11px',
+                            background: docSubTab === subTab.id ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.06)',
+                            padding: '2px 7px',
+                            borderRadius: '10px',
+                            color: docSubTab === subTab.id ? 'white' : 'var(--color-text-muted)'
+                          }}>{subTab.count}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {(() => {
+                      const currentDocs = docSubTab === 'uploaded' ? uploadedDocs :
+                                          docSubTab === 'official' ? officialDocs :
+                                          docSubTab === 'guides' ? guidebooks :
+                                          [...uploadedDocs, ...officialDocs, ...guidebooks];
+
+                      if (currentDocs.length > 0) {
+                        return (
+                          <div className="card" style={{ overflow:'hidden' }}>
+                            <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                              <thead>
+                                <tr style={{ background:'var(--color-bg)' }}>
+                                  {['File Name','Type','Ref Code','Category / Scope','Actions'].map(h => (
+                                    <th key={h} style={{ padding:'12px 16px', textAlign:'left', fontSize:11, fontWeight:600, color:'var(--color-text-muted)', textTransform:'uppercase' }}>{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {currentDocs.map((doc, i) => (
+                                  <tr key={doc.id || i} style={{ borderTop:'1px solid var(--color-border)' }}>
+                                    <td style={{ padding:'12px 16px', fontSize:13, fontWeight: 600 }}>
+                                      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                                        <FileText size={16} color={doc.type === 'Guide' || doc.type === 'Template' ? '#8b5cf6' : doc.type === 'Invoice' ? '#10b981' : '#0ea5e9'}/>
+                                        <div>
+                                          <div>{doc.name || doc.filename}</div>
+                                          <div className="text-muted" style={{ fontSize:11, fontWeight: 400 }}>{doc.filename}</div>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td style={{ padding:'12px 16px', fontSize:12 }}>
+                                      <span style={{
+                                        background: doc.type === 'User Upload' ? 'rgba(14, 165, 233, 0.08)' :
+                                                    doc.type === 'Invoice' ? 'rgba(16, 185, 129, 0.08)' :
+                                                    doc.type === 'Signed Contract' ? 'rgba(16, 185, 129, 0.08)' :
+                                                    doc.type === 'Agreement Template' ? 'rgba(99, 102, 241, 0.08)' :
+                                                    'rgba(139, 92, 246, 0.08)',
+                                        color: doc.type === 'User Upload' ? '#0ea5e9' :
+                                               doc.type === 'Invoice' ? '#10b981' :
+                                               doc.type === 'Signed Contract' ? '#10b981' :
+                                               doc.type === 'Agreement Template' ? '#6366f1' :
+                                               '#8b5cf6',
+                                        padding: '3px 8px',
+                                        borderRadius: '4px',
+                                        fontWeight: 600
+                                      }}>{doc.type}</span>
+                                    </td>
+                                    <td style={{ padding:'12px 16px', fontSize:13, fontFamily:'monospace' }}>{doc.appRef || 'N/A'}</td>
+                                    <td style={{ padding:'12px 16px', fontSize:13 }}>{doc.country}</td>
+                                    <td style={{ padding:'12px 16px' }}>
+                                      <div style={{ display: 'flex', gap: 6 }}>
+                                        <a href={doc.url} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                          <Eye size={12}/> View
+                                        </a>
+                                        <a href={doc.url} download={doc.filename} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', fontSize: 11 }}>
+                                          <Download size={12}/> Download
+                                        </a>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="card" style={{ padding:50, textAlign:'center', border:'2px dashed var(--color-border)' }}>
+                          <Upload size={48} color="var(--color-text-muted)" style={{ marginBottom:12, opacity:0.3 }}/>
+                          <h3 className="heading-4">No Files Found</h3>
+                          <p className="text-muted" style={{ fontSize:13, margin:'8px auto 20px', maxWidth:400 }}>
+                            {docSubTab === 'uploaded' ? 'You have not uploaded any checklist documents yet.' :
+                             docSubTab === 'official' ? 'No invoices or agreements have been issued yet.' :
+                             'No guides or templates are available at this moment.'}
+                          </p>
+                          {(docSubTab === 'uploaded' || docSubTab === 'all') && (
+                            <button className="btn btn-outline" onClick={() => setActiveTab('visa')}>Go to Visa Applications</button>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
 
@@ -1547,6 +1888,37 @@ export default function ClientPortalPage() {
           .portal-sidebar.open { left:0; }
           .portal-overlay { display:block; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:calc(var(--z-modal) - 1); }
           main { padding:16px 16px 140px 16px !important; }
+
+          /* Responsive Timeline Stacking */
+          .portal-timeline {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 24px !important;
+            overflow-x: visible !important;
+            padding: 10px 10px 10px 15px !important;
+          }
+          .portal-timeline-step {
+            flex-direction: row !important;
+            align-items: center !important;
+            gap: 16px !important;
+            min-width: 0 !important;
+            width: 100% !important;
+          }
+          .portal-timeline-label {
+            margin-top: 0 !important;
+            white-space: normal !important;
+            font-size: 12px !important;
+            text-align: left !important;
+            word-break: break-word !important;
+          }
+          .portal-timeline-line {
+            top: 14px !important;
+            left: 13px !important;
+            width: 2px !important;
+            height: calc(100% + 24px) !important;
+            background: var(--color-border) !important;
+            z-index: 0 !important;
+          }
         }
       `}</style>
     </div>

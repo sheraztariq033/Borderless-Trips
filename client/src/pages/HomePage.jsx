@@ -139,7 +139,10 @@ export default function HomePage() {
               loop
               muted
               playsInline
+              preload="auto"
+              poster="https://images.unsplash.com/photo-1506012787146-f92b2d7d6d96?q=80&w=1600"
               className="hero-bg-video"
+              style={{ objectFit: 'cover' }}
             />
           )}
           <div className="hero-overlay" />

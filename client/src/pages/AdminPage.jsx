@@ -119,6 +119,19 @@ function CaseExtensions({ detailModal, setDetailModal, loadAllData, user, showTo
   const data = detailModal.data;
   const isVisa = detailModal.type === 'visa';
   const isBooking = detailModal.type === 'booking';
+
+  const [localNotes, setLocalNotes] = useState(data.notes || '');
+  const [localInvoiceUrl, setLocalInvoiceUrl] = useState(data.invoice_url || '');
+  const [localSignatureLink, setLocalSignatureLink] = useState(data.signature_link || '');
+  const [localSignatureDoc, setLocalSignatureDoc] = useState(data.signature_doc || '');
+
+  useEffect(() => {
+    setLocalNotes(data.notes || '');
+    setLocalInvoiceUrl(data.invoice_url || '');
+    setLocalSignatureLink(data.signature_link || '');
+    setLocalSignatureDoc(data.signature_doc || '');
+  }, [data.id, data.notes, data.invoice_url, data.signature_link, data.signature_doc]);
+
   if (!isVisa && !isBooking) return null;
 
   const updateField = async (field, value) => {
@@ -196,8 +209,16 @@ function CaseExtensions({ detailModal, setDetailModal, loadAllData, user, showTo
             <label className="form-label" style={{ fontSize:11, fontWeight:600 }}>📅 Client-facing Notes / Interview Date & Details</label>
             <input
               className="form-input"
-              value={data.notes || ''}
-              onChange={e => updateField('notes', e.target.value)}
+              value={localNotes}
+              onChange={e => setLocalNotes(e.target.value)}
+              onBlur={() => {
+                if (localNotes !== (data.notes || '')) {
+                  updateField('notes', localNotes);
+                }
+              }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') e.target.blur();
+              }}
               placeholder="e.g. Interview scheduled for Oct 12, 10:00 AM at London Embassy"
               style={{ width: '100%', marginTop: 4, fontSize:13 }}
             />
@@ -235,8 +256,16 @@ function CaseExtensions({ detailModal, setDetailModal, loadAllData, user, showTo
           <div style={{ display:'flex', gap:8, alignItems:'center', marginTop:4 }}>
             <input
               className="form-input"
-              value={data.invoice_url || ''}
-              onChange={e => updateField('invoice_url', e.target.value)}
+              value={localInvoiceUrl}
+              onChange={e => setLocalInvoiceUrl(e.target.value)}
+              onBlur={() => {
+                if (localInvoiceUrl !== (data.invoice_url || '')) {
+                  updateField('invoice_url', localInvoiceUrl);
+                }
+              }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') e.target.blur();
+              }}
               placeholder="Direct Invoice URL (PDF)"
               style={{ flex:1 }}
             />
@@ -273,8 +302,16 @@ function CaseExtensions({ detailModal, setDetailModal, loadAllData, user, showTo
               <label className="form-label" style={{ fontSize:11 }}>SignWell / DocuSign E-Signature Link</label>
               <input
                 className="form-input"
-                value={data.signature_link || ''}
-                onChange={e => updateField('signature_link', e.target.value)}
+                value={localSignatureLink}
+                onChange={e => setLocalSignatureLink(e.target.value)}
+                onBlur={() => {
+                  if (localSignatureLink !== (data.signature_link || '')) {
+                    updateField('signature_link', localSignatureLink);
+                  }
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') e.target.blur();
+                }}
                 placeholder="Paste SignWell signature request link"
               />
             </div>
@@ -283,8 +320,16 @@ function CaseExtensions({ detailModal, setDetailModal, loadAllData, user, showTo
               <div style={{ display:'flex', gap:8, alignItems:'center' }}>
                 <input
                   className="form-input"
-                  value={data.signature_doc || ''}
-                  onChange={e => updateField('signature_doc', e.target.value)}
+                  value={localSignatureDoc}
+                  onChange={e => setLocalSignatureDoc(e.target.value)}
+                  onBlur={() => {
+                    if (localSignatureDoc !== (data.signature_doc || '')) {
+                      updateField('signature_doc', localSignatureDoc);
+                    }
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') e.target.blur();
+                  }}
                   placeholder="PDF Contract Template path"
                   style={{ flex:1 }}
                 />
