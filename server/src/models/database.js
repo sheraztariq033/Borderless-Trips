@@ -87,7 +87,11 @@ db.exec(`
     country TEXT NOT NULL,
     nationality TEXT,
     purpose TEXT,
-    status TEXT DEFAULT 'submitted' CHECK(status IN ('submitted', 'in_review', 'approved', 'rejected')),
+    status TEXT DEFAULT 'submitted' CHECK(status IN (
+      'submitted', 'in_review', 'approved', 'rejected', 'document_complete',
+      'fee_processing', 'embassy_submitted', 'interview_scheduled',
+      'visa_successful', 'visa_refused'
+    )),
     assessment_json TEXT DEFAULT '{}',
     documents_json TEXT DEFAULT '[]',
     notes TEXT DEFAULT '',
@@ -337,11 +341,11 @@ safeAddColumn('users', 'assigned_to', "INTEGER");
   safeAddColumn(table, 'comments_json', "TEXT DEFAULT '[]'");
 });
 
-// Migrate visa_applications status constraint to include 'document_complete'
+// Migrate visa_applications status constraint to include new steps
 try {
   const row = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='visa_applications'").get();
-  if (row && row.sql && !row.sql.includes('document_complete')) {
-    console.log('🔄 Migrating visa_applications table constraints to include "document_complete"...');
+  if (row && row.sql && !row.sql.includes('fee_processing')) {
+    console.log('🔄 Migrating visa_applications table constraints to include new steps...');
     
     // Check old columns to build dynamic copy statement
     db.exec("ALTER TABLE visa_applications RENAME TO temp_visa_applications;");
@@ -381,7 +385,11 @@ try {
         country TEXT NOT NULL,
         nationality TEXT,
         purpose TEXT,
-        status TEXT DEFAULT 'submitted' CHECK(status IN ('submitted', 'in_review', 'approved', 'rejected', 'document_complete')),
+        status TEXT DEFAULT 'submitted' CHECK(status IN (
+          'submitted', 'in_review', 'approved', 'rejected', 'document_complete',
+          'fee_processing', 'embassy_submitted', 'interview_scheduled',
+          'visa_successful', 'visa_refused'
+        )),
         assessment_json TEXT DEFAULT '{}',
         documents_json TEXT DEFAULT '[]',
         notes TEXT DEFAULT '',

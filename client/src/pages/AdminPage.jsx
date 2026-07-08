@@ -47,6 +47,9 @@ function StatusBadge({ status }) {
     manager:['Manager','#6366f1'], agent:['Agent','#0ea5e9'], viewer:['Viewer','#94a3b8'],
     pending_upload:['Pending Upload','#f59e0b'], uploaded:['Pending Review','#6366f1'],
     document_complete:['Docs Complete','#0ea5e9'],
+    fee_processing:['Fee Processing','#d946ef'], embassy_submitted:['Embassy Submitted','#4f46e5'],
+    interview_scheduled:['Interview Scheduled','#8b5cf6'], visa_successful:['Visa Successful','#10b981'],
+    visa_refused:['Visa Refused','#ef4444'],
   };
   const [label, color] = map[status] || [status, '#94a3b8'];
   return <span style={{ background:`${color}14`, color, padding:'3px 9px', borderRadius:20, fontSize:11, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.03em', border:`1px solid ${color}30`, whiteSpace:'nowrap', lineHeight:'18px', display:'inline-block' }}>{label}</span>;
@@ -142,8 +145,66 @@ function CaseExtensions({ detailModal, setDetailModal, loadAllData, user, showTo
   const payments = getArrayField(data.payment_info_json);
   const comments = getArrayField(data.comments_json);
 
+  const statuses = isVisa ? [
+    { value: 'submitted', label: 'Submitted' },
+    { value: 'in_review', label: 'In Review' },
+    { value: 'document_complete', label: 'Docs Complete' },
+    { value: 'fee_processing', label: 'Fee Processing' },
+    { value: 'embassy_submitted', label: 'Embassy Submitted' },
+    { value: 'interview_scheduled', label: 'Interview Scheduled' },
+    { value: 'visa_successful', label: 'Visa Successful' },
+    { value: 'visa_refused', label: 'Visa Refused' },
+    { value: 'approved', label: 'Approved' },
+    { value: 'rejected', label: 'Rejected' }
+  ] : [
+    { value: 'pending', label: 'Pending' },
+    { value: 'confirmed', label: 'Confirmed' },
+    { value: 'completed', label: 'Completed' },
+    { value: 'cancelled', label: 'Cancelled' }
+  ];
+
   return (
     <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      
+      {/* File Progress Status Editor */}
+      <div style={{ background:'var(--color-bg)', padding:16, borderRadius:8, border:'1px solid var(--color-border)', display:'flex', flexDirection:'column', gap:10 }}>
+        <div>
+          <div style={{ fontWeight:700, fontSize:13, display:'flex', alignItems:'center', gap:8 }}>
+            <span>🚦 File Progress Status:</span>
+            <StatusBadge status={data.status} />
+          </div>
+          <div className="text-muted" style={{ fontSize:11, marginTop:2 }}>
+            Select the current stage of this application. This updates the client's portal timeline instantly.
+          </div>
+        </div>
+        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+          <select
+            className="form-input form-select"
+            value={data.status || ''}
+            onChange={e => updateField('status', e.target.value)}
+            disabled={loading}
+            style={{ flex:1, height:38, fontSize:13 }}
+          >
+            {statuses.map(s => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
+        </div>
+        
+        {isVisa && (
+          <div style={{ marginTop: 4 }}>
+            <label className="form-label" style={{ fontSize:11, fontWeight:600 }}>📅 Client-facing Notes / Interview Date & Details</label>
+            <input
+              className="form-input"
+              value={data.notes || ''}
+              onChange={e => updateField('notes', e.target.value)}
+              placeholder="e.g. Interview scheduled for Oct 12, 10:00 AM at London Embassy"
+              style={{ width: '100%', marginTop: 4, fontSize:13 }}
+            />
+          </div>
+        )}
+      </div>
+
       {/* Edit Lock status, Invoice & E-Signing Panel */}
       <div style={{ background:'var(--color-bg)', padding:16, borderRadius:8, border:'1px solid var(--color-border)', display:'grid', gap:14 }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:'1px solid var(--color-border)', paddingBottom:12, flexWrap:'wrap', gap:10 }}>
@@ -1271,7 +1332,19 @@ export default function AdminPage() {
                         </div>
                       </div>
                     </div>
-                    <FilterPills value={statusFilter} onChange={setStatusFilter} options={[{label:'All',value:'all'},{label:'Submitted',value:'submitted'},{label:'In Review',value:'in_review'},{label:'Approved',value:'approved'},{label:'Rejected',value:'rejected'},{label:'Docs Complete',value:'document_complete'}]}/>
+                    <FilterPills value={statusFilter} onChange={setStatusFilter} options={[
+                      {label:'All',value:'all'},
+                      {label:'Submitted',value:'submitted'},
+                      {label:'In Review',value:'in_review'},
+                      {label:'Docs Complete',value:'document_complete'},
+                      {label:'Fee Processing',value:'fee_processing'},
+                      {label:'Embassy Submitted',value:'embassy_submitted'},
+                      {label:'Interview Scheduled',value:'interview_scheduled'},
+                      {label:'Approved',value:'approved'},
+                      {label:'Rejected',value:'rejected'},
+                      {label:'Visa Successful',value:'visa_successful'},
+                      {label:'Visa Refused',value:'visa_refused'}
+                    ]}/>
                     <div className="card admin-table-wrap" style={{ marginTop:12 }}>
                       <table className="admin-table">
                         <thead><tr>{['Ref','Customer','Country','Purpose','Status','Docs','Actions'].map(h=><th key={h}>{h}</th>)}</tr></thead>

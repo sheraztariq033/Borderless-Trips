@@ -28,12 +28,17 @@ const statusColors = {
   rejected:'#ef4444', submitted:'#f59e0b', completed:'#0ea5e9', cancelled:'#ef4444',
   paid:'#10b981', partial:'#0ea5e9', new:'#f59e0b', accepted:'#10b981', in_progress:'#6366f1',
   pending_upload:'#f59e0b', uploaded:'#6366f1', document_complete:'#0ea5e9',
+  fee_processing:'#d946ef', embassy_submitted:'#4f46e5', interview_scheduled:'#8b5cf6',
+  visa_successful:'#10b981', visa_refused:'#ef4444'
 };
 const statusLabels = {
   confirmed:'Confirmed', pending:'Pending', approved:'Approved', in_review:'In Review',
   rejected:'Rejected', submitted:'Submitted', completed:'Completed', cancelled:'Cancelled',
   paid:'Paid', partial:'Partial', new:'New', accepted:'Accepted', in_progress:'In Progress',
   pending_upload:'Pending Upload', uploaded:'Pending Review', document_complete:'Docs Complete',
+  fee_processing:'Fee Processing', embassy_submitted:'Embassy Submitted',
+  interview_scheduled:'Interview Scheduled', visa_successful:'Visa Successful',
+  visa_refused:'Visa Refused'
 };
 
 function StatusBadge({ status }) {
@@ -809,28 +814,36 @@ export default function ClientPortalPage() {
 
                           {/* Progress Timeline */}
                           <div className="portal-timeline">
-                            {['Submitted','In Review','Docs Complete','Decision'].map((step,j) => {
-                              const done = 
-                                (v.status==='approved'&&j<=3) || 
-                                (v.status==='rejected'&&j<=3) || 
-                                (v.status==='document_complete'&&j<=2) || 
-                                (v.status==='in_review'&&j<=1) || 
-                                j===0;
-                              const isCurrent = 
-                                (v.status==='submitted'&&j===0) || 
-                                (v.status==='in_review'&&j===1) || 
-                                (v.status==='document_complete'&&j===2) || 
-                                ((v.status==='approved'||v.status==='rejected')&&j===3);
-                              return (
-                                <div key={j} className="portal-timeline-step">
-                                  <div className={`portal-timeline-dot ${done?'done':''} ${isCurrent?'current':''} ${v.status==='rejected'&&j===3?'rejected':''}`}>
-                                    {done ? '✓' : j+1}
+                            {(() => {
+                              const steps = ['Submitted', 'In Review', 'Docs Complete', 'Fee Processing', 'Embassy Submitted', 'Interview Scheduled', 'Decision'];
+                              const statusStepMap = {
+                                submitted: 0,
+                                in_review: 1,
+                                document_complete: 2,
+                                fee_processing: 3,
+                                embassy_submitted: 4,
+                                interview_scheduled: 5,
+                                approved: 6,
+                                rejected: 6,
+                                visa_successful: 6,
+                                visa_refused: 6
+                              };
+                              const currentStep = statusStepMap[v.status] ?? 0;
+                              return steps.map((step, j) => {
+                                const done = currentStep >= j;
+                                const isCurrent = currentStep === j;
+                                const isRejected = j === 6 && ['rejected', 'visa_refused'].includes(v.status);
+                                return (
+                                  <div key={j} className="portal-timeline-step">
+                                    <div className={`portal-timeline-dot ${done?'done':''} ${isCurrent?'current':''} ${isRejected?'rejected':''}`}>
+                                      {done ? '✓' : j + 1}
+                                    </div>
+                                    <div style={{ fontSize:11, fontWeight:600, color:done?'var(--color-text)':'var(--color-text-muted)', whiteSpace:'nowrap', marginTop:6 }}>{step}</div>
+                                    {j < steps.length - 1 && <div className={`portal-timeline-line ${done && currentStep > j?'done':''}`}/>}
                                   </div>
-                                  <div style={{ fontSize:11, fontWeight:600, color:done?'var(--color-text)':'var(--color-text-muted)' }}>{step}</div>
-                                  {j < 3 && <div className={`portal-timeline-line ${done?'done':''}`}/>}
-                                </div>
-                              );
-                            })}
+                                );
+                              });
+                            })()}
                           </div>
 
                           {/* Documents */}
@@ -1520,8 +1533,8 @@ export default function ClientPortalPage() {
         .portal-action-btn:hover { border-color:var(--color-secondary); background:#0ea5e906; }
         .portal-doc-chip { display:inline-flex; align-items:center; gap:5px; padding:5px 10px; background:var(--color-bg); border:1px solid var(--color-border); border-radius:6px; font-size:12px; color:var(--color-text); text-decoration:none; }
         .portal-doc-chip:hover { border-color:var(--color-secondary); }
-        .portal-timeline { display:flex; align-items:center; gap:0; margin-top:16px; padding:0 20px; }
-        .portal-timeline-step { display:flex; flex-direction:column; align-items:center; position:relative; flex:1; }
+        .portal-timeline { display:flex; align-items:center; gap:0; margin-top:16px; padding:10px 20px; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+        .portal-timeline-step { display:flex; flex-direction:column; align-items:center; position:relative; flex:1; min-width:115px; }
         .portal-timeline-dot { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; background:var(--color-border); color:var(--color-text-muted); z-index:1; }
         .portal-timeline-dot.done { background:#10b981; color:white; }
         .portal-timeline-dot.current { box-shadow:0 0 0 4px #10b98130; }
