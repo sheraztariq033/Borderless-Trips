@@ -23,9 +23,11 @@ router.post('/', authenticate, (req, res) => {
       return res.status(400).json({ error: 'No file was uploaded.' });
     }
 
+    const filename = req.file.key || req.file.filename;
+
     // Return uploaded file metadata
     res.json({
-      url: `/uploads/${req.file.filename}`,
+      url: `/uploads/${filename}`,
       filename: req.file.originalname,
       mimetype: req.file.mimetype,
       size: req.file.size

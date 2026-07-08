@@ -43,8 +43,34 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Serve static uploaded files
-app.use('/uploads', express.static(path.join(__dirname, 'data', 'uploads')));
+// Serve static uploaded files (Cloudflare R2 streaming proxy with local disk fallback)
+const isR2Configured = !!(
+  process.env.R2_ACCOUNT_ID &&
+  process.env.R2_ACCESS_KEY_ID &&
+  process.env.R2_SECRET_ACCESS_KEY
+);
+
+if (isR2Configured) {
+  const { getObjectStream } = require('./src/utils/s3');
+  app.get('/uploads/:filename', (req, res) => {
+    const { filename } = req.params;
+    const stream = getObjectStream(filename);
+    stream.on('error', () => {
+      // Fallback to local files if stream error occurs (e.g. file is not in R2 but exists locally)
+      const localPath = path.join(__dirname, 'data', 'uploads', filename);
+      res.sendFile(localPath, (localErr) => {
+        if (localErr) {
+          if (!res.headersSent) {
+            res.status(404).json({ error: 'File not found.' });
+          }
+        }
+      });
+    });
+    stream.pipe(res);
+  });
+} else {
+  app.use('/uploads', express.static(path.join(__dirname, 'data', 'uploads')));
+}
 
 // Serve API with rate limiting
 app.use('/api', apiLimiter);
