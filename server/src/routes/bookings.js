@@ -1,5 +1,5 @@
 const express = require('express');
-const router = express.Router();
+const router = Router = express.Router();
 const db = require('../models/database');
 const { authenticate, adminOnly } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
@@ -9,8 +9,41 @@ function generateBookingRef() {
   return `BT-${num}`;
 }
 
+async function resolveAndLinkTravelers(travelersList) {
+  if (!travelersList || !Array.isArray(travelersList)) return travelersList;
+  const bcrypt = require('bcryptjs');
+  
+  const promises = travelersList.map(async (t) => {
+    if (t.email && t.email.trim()) {
+      const emailLower = t.email.trim().toLowerCase();
+      try {
+        const existing = await db.prepare('SELECT id FROM users WHERE email = ?').get(emailLower);
+        if (existing) {
+          t.user_id = existing.id;
+        } else {
+          // Auto-create customer user
+          const tempPassword = 'welcome123';
+          const hash = bcrypt.hashSync(tempPassword, 10);
+          const name = t.name || 'Traveler';
+          const phone = t.phone || '';
+          const nationality = t.nationality || '';
+          const result = await db.prepare(
+            'INSERT INTO users (name, email, password_hash, phone, nationality, role, sub_role) VALUES (?, ?, ?, ?, ?, ?, ?)'
+          ).run(name, emailLower, hash, phone, nationality, 'customer', '');
+          t.user_id = result.lastInsertRowid;
+        }
+      } catch (err) {
+        console.error('Error auto-creating user for co-traveler:', err);
+      }
+    }
+    return t;
+  });
+  
+  return Promise.all(promises);
+}
+
 // POST /api/bookings - Create booking
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const packageId = req.body.packageId || req.body.package_id;
   const name = req.body.name || req.body.customer_name;
   const email = req.body.email || req.body.customer_email;
@@ -41,7 +74,7 @@ router.post('/', (req, res) => {
   }
 
   try {
-    const pkg = db.prepare('SELECT title, price FROM packages WHERE id = ?').get(packageId);
+    const pkg = await db.prepare('SELECT title, price FROM packages WHERE id = ?').get(packageId);
     if (!pkg) return res.status(404).json({ error: 'Package not found.' });
 
     let autoCreated = false;
@@ -51,7 +84,7 @@ router.post('/', (req, res) => {
     const emailLower = email.toLowerCase().trim();
 
     if (!userId) {
-      const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(emailLower);
+      const existing = await db.prepare('SELECT id FROM users WHERE email = ?').get(emailLower);
       if (existing) {
         userId = existing.id;
         userExists = true;
@@ -60,7 +93,7 @@ router.post('/', (req, res) => {
         const bcrypt = require('bcryptjs');
         tempPassword = 'welcome123';
         const hash = bcrypt.hashSync(tempPassword, 10);
-        const result = db.prepare(
+        const result = await db.prepare(
           'INSERT INTO users (name, email, password_hash, phone, role, sub_role) VALUES (?, ?, ?, ?, ?, ?)'
         ).run(name, emailLower, hash, phone || '', 'customer', '');
         userId = result.lastInsertRowid;
@@ -71,7 +104,7 @@ router.post('/', (req, res) => {
         token = jwt.sign({ id: userId, role: 'customer' }, JWT_SECRET, { expiresIn: '7d' });
       }
     } else {
-      const user = db.prepare('SELECT email FROM users WHERE id = ?').get(userId);
+      const user = await db.prepare('SELECT email FROM users WHERE id = ?').get(userId);
       if (user && user.email.toLowerCase() === emailLower) {
         userExists = true;
       }
@@ -79,8 +112,9 @@ router.post('/', (req, res) => {
 
     const bookingRef = generateBookingRef();
     const totalPrice = pkg.price * (parseInt(travelers) || 1);
+    const resolvedTravelers = await resolveAndLinkTravelers(travelersData);
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO bookings (
         booking_ref, user_id, package_id, package_title, customer_name, customer_email, customer_phone, 
         travel_date, travelers, total_price, status, payment_status, notes, admin_notes, 
@@ -90,10 +124,10 @@ router.post('/', (req, res) => {
     `).run(
       bookingRef, userId, packageId, pkg.title, name, emailLower, phone || '', 
       travelDate, parseInt(travelers) || 1, totalPrice, notes || '',
-      JSON.stringify(travelersData), JSON.stringify(paymentInfo)
+      JSON.stringify(resolvedTravelers), JSON.stringify(paymentInfo)
     );
 
-    const booking = db.prepare('SELECT * FROM bookings WHERE booking_ref = ?').get(bookingRef);
+    const booking = await db.prepare('SELECT * FROM bookings WHERE booking_ref = ?').get(bookingRef);
     res.status(201).json({
       message: 'Booking created successfully.',
       booking,
@@ -109,49 +143,19 @@ router.post('/', (req, res) => {
   }
 });
 
-function resolveAndLinkTravelers(travelersList) {
-  if (!travelersList || !Array.isArray(travelersList)) return travelersList;
-  const bcrypt = require('bcryptjs');
-  return travelersList.map(t => {
-    if (t.email && t.email.trim()) {
-      const emailLower = t.email.trim().toLowerCase();
-      try {
-        const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(emailLower);
-        if (existing) {
-          t.user_id = existing.id;
-        } else {
-          // Auto-create customer user
-          const tempPassword = 'welcome123';
-          const hash = bcrypt.hashSync(tempPassword, 10);
-          const name = t.name || 'Traveler';
-          const phone = t.phone || '';
-          const nationality = t.nationality || '';
-          const result = db.prepare(
-            'INSERT INTO users (name, email, password_hash, phone, nationality, role, sub_role) VALUES (?, ?, ?, ?, ?, ?, ?)'
-          ).run(name, emailLower, hash, phone, nationality, 'customer', '');
-          t.user_id = result.lastInsertRowid;
-        }
-      } catch (err) {
-        console.error('Error auto-creating user for co-traveler:', err);
-      }
-    }
-    return t;
-  });
-}
-
 // GET /api/bookings - List bookings
-router.get('/', authenticate, (req, res) => {
+router.get('/', authenticate, async (req, res) => {
   try {
     let bookings;
     if (req.user.role === 'admin') {
       if (req.user.sub_role === 'agent') {
-        bookings = db.prepare(`
+        bookings = await db.prepare(`
           SELECT b.*, u.name as assigned_name 
           FROM bookings b LEFT JOIN users u ON b.assigned_to = u.id 
           WHERE b.assigned_to = ? ORDER BY b.created_at DESC
         `).all(req.user.id);
       } else {
-        bookings = db.prepare(`
+        bookings = await db.prepare(`
           SELECT b.*, u.name as assigned_name 
           FROM bookings b LEFT JOIN users u ON b.assigned_to = u.id 
           ORDER BY b.created_at DESC
@@ -161,7 +165,7 @@ router.get('/', authenticate, (req, res) => {
       const searchEmail = `%"email":"${req.user.email.toLowerCase()}"%`;
       const searchUserIdNum = `%"user_id":${req.user.id}%`;
       const searchUserIdStr = `%"user_id":"${req.user.id}"%`;
-      bookings = db.prepare(`
+      bookings = await db.prepare(`
         SELECT * FROM bookings 
         WHERE user_id = ? 
            OR customer_email = ? 
@@ -185,13 +189,13 @@ router.get('/', authenticate, (req, res) => {
 });
 
 // POST /api/bookings/:id/payment - Submit payment reference
-router.post('/:id/payment', authenticate, (req, res) => {
+router.post('/:id/payment', authenticate, async (req, res) => {
   const { id } = req.params;
   const { paymentRef } = req.body;
   if (!paymentRef) return res.status(400).json({ error: 'Payment reference required.' });
 
   try {
-    const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+    const booking = await db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
     if (!booking) return res.status(404).json({ error: 'Booking not found.' });
     
     if (req.user.role !== 'admin') {
@@ -209,7 +213,7 @@ router.post('/:id/payment', authenticate, (req, res) => {
       }
     }
 
-    db.prepare('UPDATE bookings SET payment_ref = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(paymentRef, id);
+    await db.prepare('UPDATE bookings SET payment_ref = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(paymentRef, id);
     res.json({ message: 'Payment reference submitted.' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to submit payment reference.' });
@@ -217,7 +221,7 @@ router.post('/:id/payment', authenticate, (req, res) => {
 });
 
 // PUT /api/bookings/:id - Update booking
-router.put('/:id', authenticate, (req, res) => {
+router.put('/:id', authenticate, async (req, res) => {
   const { id } = req.params;
   const {
     status, payment_status, payment_ref, notes, admin_notes, travel_date, travelers, assigned_to,
@@ -229,7 +233,7 @@ router.put('/:id', authenticate, (req, res) => {
   const paymentProof = req.body.paymentProof !== undefined ? req.body.paymentProof : req.body.payment_proof;
 
   try {
-    const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+    const booking = await db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
     if (!booking) return res.status(404).json({ error: 'Booking not found.' });
 
     if (req.user.role === 'admin') {
@@ -239,10 +243,10 @@ router.put('/:id', authenticate, (req, res) => {
 
       let resolvedTravelers = null;
       if (travelersData) {
-        resolvedTravelers = resolveAndLinkTravelers(travelersData);
+        resolvedTravelers = await resolveAndLinkTravelers(travelersData);
       }
 
-      db.prepare(`
+      await db.prepare(`
         UPDATE bookings SET
           status = COALESCE(?, status), payment_status = COALESCE(?, payment_status),
           payment_ref = COALESCE(?, payment_ref), notes = COALESCE(?, notes),
@@ -266,15 +270,15 @@ router.put('/:id', authenticate, (req, res) => {
       );
 
       if (travelers && travelers !== booking.travelers) {
-        const pkg = db.prepare('SELECT price FROM packages WHERE id = ?').get(booking.package_id);
-        if (pkg) db.prepare('UPDATE bookings SET total_price = ? WHERE id = ?').run(pkg.price * travelers, id);
+        const pkg = await db.prepare('SELECT price FROM packages WHERE id = ?').get(booking.package_id);
+        if (pkg) await db.prepare('UPDATE bookings SET total_price = ? WHERE id = ?').run(pkg.price * travelers, id);
       }
 
       // Notify customer on status change
       if (status && booking.user_id && status !== booking.status) {
         const labels = { confirmed: 'Confirmed', cancelled: 'Cancelled', completed: 'Completed' };
         if (labels[status]) {
-          db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)')
+          await db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)')
             .run(booking.user_id, `Booking ${labels[status]}`, `Your booking ${booking.booking_ref} has been ${labels[status].toLowerCase()}.`, status === 'cancelled' ? 'warning' : 'success');
         }
       }
@@ -327,20 +331,20 @@ router.put('/:id', authenticate, (req, res) => {
       }
 
       if (travelersData !== undefined) {
-        const resolvedTravelers = resolveAndLinkTravelers(travelersData);
-        db.prepare('UPDATE bookings SET travelers_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-          .run(JSON.stringify(resolvedTravelers), id);
+        const resolved = await resolveAndLinkTravelers(travelersData);
+        await db.prepare('UPDATE bookings SET travelers_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+          .run(JSON.stringify(resolved), id);
       }
       if (signed_document_url !== undefined) {
-        db.prepare('UPDATE bookings SET signed_document_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+        await db.prepare('UPDATE bookings SET signed_document_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
           .run(signed_document_url, id);
       }
       if (paymentProof !== undefined) {
-        db.prepare('UPDATE bookings SET payment_proof = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+        await db.prepare('UPDATE bookings SET payment_proof = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
           .run(paymentProof, id);
       }
       if (comments !== undefined) {
-        db.prepare('UPDATE bookings SET comments_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+        await db.prepare('UPDATE bookings SET comments_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
           .run(JSON.stringify(comments), id);
       }
 
@@ -353,10 +357,10 @@ router.put('/:id', authenticate, (req, res) => {
 });
 
 // PUT /api/bookings/:id/cancel - Client cancel booking
-router.put('/:id/cancel', authenticate, (req, res) => {
+router.put('/:id/cancel', authenticate, async (req, res) => {
   const { id } = req.params;
   try {
-    const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+    const booking = await db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
     if (!booking) return res.status(404).json({ error: 'Booking not found.' });
     
     if (req.user.role !== 'admin') {
@@ -376,7 +380,7 @@ router.put('/:id/cancel', authenticate, (req, res) => {
     
     if (booking.status === 'completed') return res.status(400).json({ error: 'Cannot cancel a completed booking.' });
 
-    db.prepare("UPDATE bookings SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
+    await db.prepare("UPDATE bookings SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
 
     // Notify client via email
     const { sendStatusUpdateEmail } = require('../utils/mailer');
@@ -397,10 +401,13 @@ router.put('/:id/cancel', authenticate, (req, res) => {
 });
 
 // DELETE /api/bookings/:id - Delete booking (Admin Only)
-router.delete('/:id', authenticate, adminOnly, (req, res) => {
+router.delete('/:id', authenticate, adminOnly, async (req, res) => {
   const { id } = req.params;
   try {
-    db.prepare('DELETE FROM bookings WHERE id = ?').run(id);
+    const booking = await db.prepare('SELECT id FROM bookings WHERE id = ?').get(id);
+    if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+
+    await db.prepare('DELETE FROM bookings WHERE id = ?').run(id);
     res.json({ message: 'Booking deleted.' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete booking.' });

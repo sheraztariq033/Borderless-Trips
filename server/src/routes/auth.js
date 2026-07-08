@@ -7,7 +7,7 @@ const { authenticate, JWT_SECRET } = require('../middleware/auth');
 const { authLimiter } = require('../middleware/rateLimiter');
 
 // POST /api/auth/register
-router.post('/register', authLimiter, (req, res) => {
+router.post('/register', authLimiter, async (req, res) => {
   const { name, email, password, phone, nationality } = req.body;
 
   if (!name || !email || !password) {
@@ -15,13 +15,13 @@ router.post('/register', authLimiter, (req, res) => {
   }
 
   try {
-    const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase());
+    const existingUser = await db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase());
     if (existingUser) {
       return res.status(400).json({ error: 'A user with this email already exists.' });
     }
 
     const hash = bcrypt.hashSync(password, 10);
-    const result = db.prepare(
+    const result = await db.prepare(
       'INSERT INTO users (name, email, password_hash, phone, nationality, role, sub_role) VALUES (?, ?, ?, ?, ?, ?, ?)'
     ).run(name, email.toLowerCase(), hash, phone || '', nationality || '', 'customer', '');
 
@@ -38,7 +38,7 @@ router.post('/register', authLimiter, (req, res) => {
 });
 
 // POST /api/auth/login
-router.post('/login', authLimiter, (req, res) => {
+router.post('/login', authLimiter, async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -46,7 +46,7 @@ router.post('/login', authLimiter, (req, res) => {
   }
 
   try {
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase());
+    const user = await db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase());
     if (!user) return res.status(400).json({ error: 'Invalid email or password.' });
     if (user.status === 'suspended') return res.status(403).json({ error: 'Account suspended. Contact admin.' });
 
@@ -74,13 +74,13 @@ router.get('/me', authenticate, (req, res) => {
 });
 
 // PUT /api/auth/profile
-router.put('/profile', authenticate, (req, res) => {
+router.put('/profile', authenticate, async (req, res) => {
   const { name, phone, nationality, profile_photo } = req.body;
   try {
-    db.prepare(
+    await db.prepare(
       'UPDATE users SET name = COALESCE(?, name), phone = COALESCE(?, phone), nationality = COALESCE(?, nationality), profile_photo = COALESCE(?, profile_photo) WHERE id = ?'
     ).run(name, phone, nationality, profile_photo, req.user.id);
-    const updatedUser = db.prepare(`
+    const updatedUser = await db.prepare(`
       SELECT u.id, u.name, u.email, u.phone, u.nationality, u.role, u.sub_role, u.profile_photo, u.created_at, u.assigned_to,
         a.name as assigned_name
       FROM users u
@@ -94,10 +94,10 @@ router.put('/profile', authenticate, (req, res) => {
 });
 
 // GET /api/auth/customers - List all registered customers (Admin Only)
-router.get('/customers', authenticate, (req, res) => {
+router.get('/customers', authenticate, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only.' });
   try {
-    const customers = db.prepare(`
+    const customers = await db.prepare(`
       SELECT u.id, u.name, u.email, u.phone, u.nationality, u.status, u.profile_photo, u.created_at, u.assigned_to,
         a.name as assigned_name,
         (SELECT COUNT(*) FROM bookings WHERE user_id = u.id OR customer_email = u.email) as booking_count,
@@ -114,10 +114,10 @@ router.get('/customers', authenticate, (req, res) => {
 });
 
 // GET /api/auth/staff - List staff/admin users (Admin Only)
-router.get('/staff', authenticate, (req, res) => {
+router.get('/staff', authenticate, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only.' });
   try {
-    const staff = db.prepare(
+    const staff = await db.prepare(
       "SELECT id, name, email, phone, role, sub_role, status, profile_photo, created_at FROM users WHERE role = 'admin' ORDER BY created_at ASC"
     ).all();
     res.json(staff);
@@ -127,20 +127,20 @@ router.get('/staff', authenticate, (req, res) => {
 });
 
 // POST /api/auth/create-staff - Create staff account (Admin Only)
-router.post('/create-staff', authenticate, (req, res) => {
+router.post('/create-staff', authenticate, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only.' });
   const { name, email, password, sub_role } = req.body;
   if (!name || !email || !password) return res.status(400).json({ error: 'Name, email, and password required.' });
 
   try {
-    const exists = db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase());
+    const exists = await db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase());
     if (exists) return res.status(400).json({ error: 'Email already in use.' });
 
     const hash = bcrypt.hashSync(password, 10);
     const validRoles = ['manager', 'agent', 'viewer'];
     const role = validRoles.includes(sub_role) ? sub_role : 'agent';
 
-    db.prepare('INSERT INTO users (name, email, password_hash, role, sub_role) VALUES (?, ?, ?, ?, ?)')
+    await db.prepare('INSERT INTO users (name, email, password_hash, role, sub_role) VALUES (?, ?, ?, ?, ?)')
       .run(name, email.toLowerCase(), hash, 'admin', role);
 
     res.status(201).json({ message: `Staff account created: ${email}` });
@@ -150,16 +150,16 @@ router.post('/create-staff', authenticate, (req, res) => {
 });
 
 // PUT /api/auth/users/:id/role - Update user role/status (Admin Only)
-router.put('/users/:id/role', authenticate, (req, res) => {
+router.put('/users/:id/role', authenticate, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only.' });
   const { id } = req.params;
   const { sub_role, status } = req.body;
 
   try {
-    const user = db.prepare('SELECT id FROM users WHERE id = ?').get(id);
+    const user = await db.prepare('SELECT id FROM users WHERE id = ?').get(id);
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
-    db.prepare('UPDATE users SET sub_role = COALESCE(?, sub_role), status = COALESCE(?, status) WHERE id = ?')
+    await db.prepare('UPDATE users SET sub_role = COALESCE(?, sub_role), status = COALESCE(?, status) WHERE id = ?')
       .run(sub_role, status, id);
     res.json({ message: 'User updated.' });
   } catch (error) {
@@ -168,13 +168,13 @@ router.put('/users/:id/role', authenticate, (req, res) => {
 });
 
 // PUT /api/auth/users/:id/status - Update customer status (Admin Only)
-router.put('/users/:id/status', authenticate, (req, res) => {
+router.put('/users/:id/status', authenticate, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only.' });
   const { id } = req.params;
   const { status } = req.body;
 
   try {
-    db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, id);
+    await db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, id);
     res.json({ message: 'Customer status updated.' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update customer status.' });
@@ -182,7 +182,7 @@ router.put('/users/:id/status', authenticate, (req, res) => {
 });
 
 // POST /api/auth/customers - Create customer account (Admin Only)
-router.post('/customers', authenticate, (req, res) => {
+router.post('/customers', authenticate, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only.' });
   const { name, email, phone, nationality, password, status, assigned_to } = req.body;
 
@@ -191,7 +191,7 @@ router.post('/customers', authenticate, (req, res) => {
   }
 
   try {
-    const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase());
+    const existingUser = await db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase());
     if (existingUser) {
       return res.status(400).json({ error: 'A user with this email already exists.' });
     }
@@ -200,7 +200,7 @@ router.post('/customers', authenticate, (req, res) => {
     const hash = bcrypt.hashSync(tempPassword, 10);
     const userStatus = status || 'active';
 
-    const result = db.prepare(`
+    const result = await db.prepare(`
       INSERT INTO users (name, email, password_hash, phone, nationality, role, sub_role, status, assigned_to)
       VALUES (?, ?, ?, ?, ?, 'customer', '', ?, ?)
     `).run(name, email.toLowerCase(), hash, phone || '', nationality || '', userStatus, assigned_to || null);
@@ -225,7 +225,7 @@ router.post('/customers', authenticate, (req, res) => {
 });
 
 // PUT /api/auth/customers/:id - Update customer account (Admin Only)
-router.put('/customers/:id', authenticate, (req, res) => {
+router.put('/customers/:id', authenticate, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only.' });
   const { id } = req.params;
   const { name, email, phone, nationality, status, profile_photo, assigned_to } = req.body;
@@ -235,18 +235,18 @@ router.put('/customers/:id', authenticate, (req, res) => {
   }
 
   try {
-    const customer = db.prepare('SELECT id FROM users WHERE id = ? AND role = "customer"').get(id);
+    const customer = await db.prepare("SELECT id FROM users WHERE id = ? AND role = 'customer'").get(id);
     if (!customer) {
       return res.status(404).json({ error: 'Customer not found.' });
     }
 
     // Check email uniqueness if email is changing
-    const emailCheck = db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(email.toLowerCase(), id);
+    const emailCheck = await db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(email.toLowerCase(), id);
     if (emailCheck) {
       return res.status(400).json({ error: 'Email already in use by another user.' });
     }
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE users SET
         name = COALESCE(?, name),
         email = COALESCE(?, email),
@@ -265,7 +265,7 @@ router.put('/customers/:id', authenticate, (req, res) => {
 });
 
 // PUT /api/auth/staff/:id - Update staff account (Admin Only)
-router.put('/staff/:id', authenticate, (req, res) => {
+router.put('/staff/:id', authenticate, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only.' });
   const { id } = req.params;
   const { name, email, password, sub_role, status } = req.body;
@@ -275,13 +275,13 @@ router.put('/staff/:id', authenticate, (req, res) => {
   }
 
   try {
-    const existingStaff = db.prepare('SELECT id, password_hash FROM users WHERE id = ? AND role = "admin"').get(id);
+    const existingStaff = await db.prepare("SELECT id, password_hash FROM users WHERE id = ? AND role = 'admin'").get(id);
     if (!existingStaff) {
       return res.status(404).json({ error: 'Staff member not found.' });
     }
 
     // Check if email already used by another user
-    const emailCheck = db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(email.toLowerCase(), id);
+    const emailCheck = await db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(email.toLowerCase(), id);
     if (emailCheck) {
       return res.status(400).json({ error: 'Email already in use.' });
     }
@@ -295,7 +295,7 @@ router.put('/staff/:id', authenticate, (req, res) => {
     const finalSubRole = validRoles.includes(sub_role) ? sub_role : 'agent';
     const finalStatus = ['active', 'suspended'].includes(status) ? status : 'active';
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE users SET
         name = ?,
         email = ?,
@@ -312,7 +312,7 @@ router.put('/staff/:id', authenticate, (req, res) => {
 });
 
 // DELETE /api/auth/staff/:id - Delete staff account (Admin Only)
-router.delete('/staff/:id', authenticate, (req, res) => {
+router.delete('/staff/:id', authenticate, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only.' });
   const { id } = req.params;
 
@@ -322,23 +322,29 @@ router.delete('/staff/:id', authenticate, (req, res) => {
   }
 
   try {
-    const existingStaff = db.prepare('SELECT id FROM users WHERE id = ? AND role = "admin"').get(id);
+    const existingStaff = await db.prepare("SELECT id FROM users WHERE id = ? AND role = 'admin'").get(id);
     if (!existingStaff) {
       return res.status(404).json({ error: 'Staff member not found.' });
     }
 
-    // Perform deletions and updates inside a transaction
-    const deleteTransaction = db.transaction(() => {
-      db.prepare('UPDATE bookings SET assigned_to = NULL WHERE assigned_to = ?').run(id);
-      db.prepare('UPDATE visa_applications SET assigned_to = NULL WHERE assigned_to = ?').run(id);
-      db.prepare('UPDATE inquiries SET assigned_to = NULL WHERE assigned_to = ?').run(id);
-      db.prepare('UPDATE flight_requests SET assigned_to = NULL WHERE assigned_to = ?').run(id);
-      db.prepare('UPDATE service_requests SET assigned_to = NULL WHERE assigned_to = ?').run(id);
-      db.prepare('UPDATE users SET assigned_to = NULL WHERE assigned_to = ?').run(id);
-      db.prepare('DELETE FROM users WHERE id = ?').run(id);
-    });
-
-    deleteTransaction();
+    // Run transaction using the PG pool connection client
+    const client = await db.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('UPDATE bookings SET assigned_to = NULL WHERE assigned_to = $1', [id]);
+      await client.query('UPDATE visa_applications SET assigned_to = NULL WHERE assigned_to = $1', [id]);
+      await client.query('UPDATE inquiries SET assigned_to = NULL WHERE assigned_to = $1', [id]);
+      await client.query('UPDATE flight_requests SET assigned_to = NULL WHERE assigned_to = $1', [id]);
+      await client.query('UPDATE service_requests SET assigned_to = NULL WHERE assigned_to = $1', [id]);
+      await client.query('UPDATE users SET assigned_to = NULL WHERE assigned_to = $1', [id]);
+      await client.query('DELETE FROM users WHERE id = $1', [id]);
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
 
     res.json({ message: 'Staff member deleted successfully.' });
   } catch (error) {
@@ -347,4 +353,3 @@ router.delete('/staff/:id', authenticate, (req, res) => {
 });
 
 module.exports = router;
-

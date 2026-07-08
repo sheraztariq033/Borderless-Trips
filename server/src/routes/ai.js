@@ -9,7 +9,7 @@ const VISA_FREE_NATIONS = [
 ];
 
 // POST /api/ai/assess-eligibility - Visa eligibility assessment engine
-router.post('/assess-eligibility', (req, res) => {
+router.post('/assess-eligibility', async (req, res) => {
   const { nationality, destination, brpStatus, financialStatus, employmentStatus, purpose } = req.body;
 
   if (!nationality || !destination) {
@@ -151,13 +151,13 @@ router.post('/assess-eligibility', (req, res) => {
       typeFilter = 'luxury';
     }
 
-    const matched = db.prepare('SELECT id, title, destination, duration, price, type, images FROM packages WHERE active = 1 AND destination = ? LIMIT 2').all(destClean);
+    const matched = await db.prepare('SELECT id, title, destination, duration, price, type, images FROM packages WHERE active = 1 AND destination = ? LIMIT 2').all(destClean);
     
     if (matched.length > 0) {
       recommendedPackages = matched;
     } else {
       // Fallback to featured
-      recommendedPackages = db.prepare('SELECT id, title, destination, duration, price, type, images FROM packages WHERE active = 1 AND featured = 1 LIMIT 2').all();
+      recommendedPackages = await db.prepare('SELECT id, title, destination, duration, price, type, images FROM packages WHERE active = 1 AND featured = 1 LIMIT 2').all();
     }
 
     recommendedPackages = recommendedPackages.map(p => ({

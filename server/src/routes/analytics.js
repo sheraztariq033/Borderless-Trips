@@ -4,70 +4,75 @@ const db = require('../models/database');
 const { authenticate, adminOnly } = require('../middleware/auth');
 
 // GET /api/analytics/dashboard
-router.get('/dashboard', authenticate, adminOnly, (req, res) => {
+router.get('/dashboard', authenticate, adminOnly, async (req, res) => {
   try {
     const isAgent = req.user.sub_role === 'agent';
     const agentId = req.user.id;
 
+    const runQuery = async (sql, ...params) => {
+      const row = await db.prepare(sql).get(...params);
+      return row ? parseFloat(row.c !== undefined ? row.c : (row.r !== undefined ? row.r : '0')) : 0;
+    };
+
     const totalBookings = isAgent 
-      ? db.prepare('SELECT COUNT(*) as c FROM bookings WHERE assigned_to = ?').get(agentId).c 
-      : db.prepare('SELECT COUNT(*) as c FROM bookings').get().c;
+      ? await runQuery('SELECT COUNT(*) as c FROM bookings WHERE assigned_to = ?', agentId)
+      : await runQuery('SELECT COUNT(*) as c FROM bookings');
       
     const confirmedBookings = isAgent 
-      ? db.prepare("SELECT COUNT(*) as c FROM bookings WHERE status = 'confirmed' AND assigned_to = ?").get(agentId).c 
-      : db.prepare("SELECT COUNT(*) as c FROM bookings WHERE status = 'confirmed'").get().c;
+      ? await runQuery("SELECT COUNT(*) as c FROM bookings WHERE status = 'confirmed' AND assigned_to = ?", agentId)
+      : await runQuery("SELECT COUNT(*) as c FROM bookings WHERE status = 'confirmed'");
       
     const completedBookings = isAgent 
-      ? db.prepare("SELECT COUNT(*) as c FROM bookings WHERE status = 'completed' AND assigned_to = ?").get(agentId).c 
-      : db.prepare("SELECT COUNT(*) as c FROM bookings WHERE status = 'completed'").get().c;
+      ? await runQuery("SELECT COUNT(*) as c FROM bookings WHERE status = 'completed' AND assigned_to = ?", agentId)
+      : await runQuery("SELECT COUNT(*) as c FROM bookings WHERE status = 'completed'");
       
     const revenue = isAgent 
-      ? db.prepare("SELECT COALESCE(SUM(total_price), 0) as r FROM bookings WHERE payment_status = 'paid' AND assigned_to = ?").get(agentId).r 
-      : db.prepare("SELECT COALESCE(SUM(total_price), 0) as r FROM bookings WHERE payment_status = 'paid'").get().r;
+      ? await runQuery("SELECT COALESCE(SUM(total_price), 0) as r FROM bookings WHERE payment_status = 'paid' AND assigned_to = ?", agentId)
+      : await runQuery("SELECT COALESCE(SUM(total_price), 0) as r FROM bookings WHERE payment_status = 'paid'");
       
     const totalCustomers = isAgent 
-      ? db.prepare(`
+      ? await runQuery(`
           SELECT COUNT(DISTINCT user_id) as c FROM (
-            SELECT user_id FROM bookings WHERE assigned_to = ? AND user_id IS NOT NULL
+            SELECT user_id FROM bookings WHERE assigned_to = $1 AND user_id IS NOT NULL
             UNION
-            SELECT user_id FROM visa_applications WHERE assigned_to = ? AND user_id IS NOT NULL
+            SELECT user_id FROM visa_applications WHERE assigned_to = $2 AND user_id IS NOT NULL
             UNION
-            SELECT user_id FROM flight_requests WHERE assigned_to = ? AND user_id IS NOT NULL
+            SELECT user_id FROM flight_requests WHERE assigned_to = $3 AND user_id IS NOT NULL
             UNION
-            SELECT user_id FROM service_requests WHERE assigned_to = ? AND user_id IS NOT NULL
-          )
-        `).get(agentId, agentId, agentId, agentId).c 
-      : db.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'customer'").get().c;
+            SELECT user_id FROM service_requests WHERE assigned_to = $4 AND user_id IS NOT NULL
+          ) tmp
+        `, agentId, agentId, agentId, agentId)
+      : await runQuery("SELECT COUNT(*) as c FROM users WHERE role = 'customer'");
       
     const activeInquiries = isAgent 
-      ? db.prepare("SELECT COUNT(*) as c FROM inquiries WHERE status = 'new' AND assigned_to = ?").get(agentId).c 
-      : db.prepare("SELECT COUNT(*) as c FROM inquiries WHERE status = 'new'").get().c;
+      ? await runQuery("SELECT COUNT(*) as c FROM inquiries WHERE status = 'new' AND assigned_to = ?", agentId)
+      : await runQuery("SELECT COUNT(*) as c FROM inquiries WHERE status = 'new'");
       
     const totalVisaApps = isAgent 
-      ? db.prepare('SELECT COUNT(*) as c FROM visa_applications WHERE assigned_to = ?').get(agentId).c 
-      : db.prepare('SELECT COUNT(*) as c FROM visa_applications').get().c;
+      ? await runQuery('SELECT COUNT(*) as c FROM visa_applications WHERE assigned_to = ?', agentId)
+      : await runQuery('SELECT COUNT(*) as c FROM visa_applications');
       
     const pendingVisas = isAgent 
-      ? db.prepare("SELECT COUNT(*) as c FROM visa_applications WHERE status IN ('submitted', 'in_review') AND assigned_to = ?").get(agentId).c 
-      : db.prepare("SELECT COUNT(*) as c FROM visa_applications WHERE status IN ('submitted', 'in_review')").get().c;
+      ? await runQuery("SELECT COUNT(*) as c FROM visa_applications WHERE status IN ('submitted', 'in_review') AND assigned_to = ?", agentId)
+      : await runQuery("SELECT COUNT(*) as c FROM visa_applications WHERE status IN ('submitted', 'in_review')");
       
     const totalServiceReqs = isAgent 
-      ? db.prepare('SELECT COUNT(*) as c FROM service_requests WHERE assigned_to = ?').get(agentId).c 
-      : db.prepare('SELECT COUNT(*) as c FROM service_requests').get().c;
+      ? await runQuery('SELECT COUNT(*) as c FROM service_requests WHERE assigned_to = ?', agentId)
+      : await runQuery('SELECT COUNT(*) as c FROM service_requests');
       
     const newServiceReqs = isAgent 
-      ? db.prepare("SELECT COUNT(*) as c FROM service_requests WHERE status = 'new' AND assigned_to = ?").get(agentId).c 
-      : db.prepare("SELECT COUNT(*) as c FROM service_requests WHERE status = 'new'").get().c;
+      ? await runQuery("SELECT COUNT(*) as c FROM service_requests WHERE status = 'new' AND assigned_to = ?", agentId)
+      : await runQuery("SELECT COUNT(*) as c FROM service_requests WHERE status = 'new'");
       
     const totalFlightReqs = isAgent 
-      ? db.prepare('SELECT COUNT(*) as c FROM flight_requests WHERE assigned_to = ?').get(agentId).c 
-      : db.prepare('SELECT COUNT(*) as c FROM flight_requests').get().c;
+      ? await runQuery('SELECT COUNT(*) as c FROM flight_requests WHERE assigned_to = ?', agentId)
+      : await runQuery('SELECT COUNT(*) as c FROM flight_requests');
       
-    const subscribers = isAgent ? 0 : db.prepare('SELECT COUNT(*) as c FROM newsletter_subscribers').get().c;
+    const subscribers = isAgent ? 0 : await runQuery('SELECT COUNT(*) as c FROM newsletter_subscribers');
     
     let unreadMsgs = 0;
     if (isAgent) {
-      const assignedUserRows = db.prepare(`
+      const assignedUserRows = await db.prepare(`
         SELECT DISTINCT id as user_id FROM users WHERE assigned_to = ?
         UNION
         SELECT DISTINCT user_id FROM visa_applications WHERE assigned_to = ? AND user_id IS NOT NULL
@@ -81,54 +86,54 @@ router.get('/dashboard', authenticate, adminOnly, (req, res) => {
       const assignedUserIds = assignedUserRows.map(row => row.user_id);
       if (assignedUserIds.length > 0) {
         const placeholders = assignedUserIds.map(() => '?').join(',');
-        unreadMsgs = db.prepare(`
+        unreadMsgs = await runQuery(`
           SELECT COUNT(*) as c FROM messages 
           WHERE sender = 'customer' AND is_read = 0 AND user_id IN (${placeholders})
-        `).get(...assignedUserIds).c;
+        `, ...assignedUserIds);
       }
     } else {
-      unreadMsgs = db.prepare("SELECT COUNT(*) as c FROM messages WHERE sender = 'customer' AND is_read = 0").get().c;
+      unreadMsgs = await runQuery("SELECT COUNT(*) as c FROM messages WHERE sender = 'customer' AND is_read = 0");
     }
 
     // This week stats
     const thisWeekBookings = isAgent 
-      ? db.prepare("SELECT COUNT(*) as c FROM bookings WHERE created_at >= DATE('now', '-7 days') AND assigned_to = ?").get(agentId).c 
-      : db.prepare("SELECT COUNT(*) as c FROM bookings WHERE created_at >= DATE('now', '-7 days')").get().c;
+      ? await runQuery("SELECT COUNT(*) as c FROM bookings WHERE created_at >= CURRENT_DATE - INTERVAL '7 days' AND assigned_to = ?", agentId)
+      : await runQuery("SELECT COUNT(*) as c FROM bookings WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'");
       
     const thisWeekRevenue = isAgent 
-      ? db.prepare("SELECT COALESCE(SUM(total_price), 0) as r FROM bookings WHERE payment_status = 'paid' AND created_at >= DATE('now', '-7 days') AND assigned_to = ?").get(agentId).r 
-      : db.prepare("SELECT COALESCE(SUM(total_price), 0) as r FROM bookings WHERE payment_status = 'paid' AND created_at >= DATE('now', '-7 days')").get().r;
+      ? await runQuery("SELECT COALESCE(SUM(total_price), 0) as r FROM bookings WHERE payment_status = 'paid' AND created_at >= CURRENT_DATE - INTERVAL '7 days' AND assigned_to = ?", agentId)
+      : await runQuery("SELECT COALESCE(SUM(total_price), 0) as r FROM bookings WHERE payment_status = 'paid' AND created_at >= CURRENT_DATE - INTERVAL '7 days'");
       
     const thisWeekRequests = isAgent 
-      ? db.prepare("SELECT COUNT(*) as c FROM service_requests WHERE created_at >= DATE('now', '-7 days') AND assigned_to = ?").get(agentId).c 
-      : db.prepare("SELECT COUNT(*) as c FROM service_requests WHERE created_at >= DATE('now', '-7 days')").get().c;
+      ? await runQuery("SELECT COUNT(*) as c FROM service_requests WHERE created_at >= CURRENT_DATE - INTERVAL '7 days' AND assigned_to = ?", agentId)
+      : await runQuery("SELECT COUNT(*) as c FROM service_requests WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'");
       
     const todayRequests = isAgent 
-      ? db.prepare("SELECT COUNT(*) as c FROM service_requests WHERE DATE(created_at) = DATE('now') AND assigned_to = ?").get(agentId).c 
-      : db.prepare("SELECT COUNT(*) as c FROM service_requests WHERE DATE(created_at) = DATE('now')").get().c;
+      ? await runQuery("SELECT COUNT(*) as c FROM service_requests WHERE created_at::date = CURRENT_DATE AND assigned_to = ?", agentId)
+      : await runQuery("SELECT COUNT(*) as c FROM service_requests WHERE created_at::date = CURRENT_DATE");
 
     // Service request breakdown by type
     const reqByType = isAgent 
-      ? db.prepare('SELECT service_type, COUNT(*) as count FROM service_requests WHERE assigned_to = ? GROUP BY service_type').all(agentId) 
-      : db.prepare('SELECT service_type, COUNT(*) as count FROM service_requests GROUP BY service_type').all();
+      ? await db.prepare('SELECT service_type, COUNT(*) as count FROM service_requests WHERE assigned_to = ? GROUP BY service_type').all(agentId) 
+      : await db.prepare('SELECT service_type, COUNT(*) as count FROM service_requests GROUP BY service_type').all();
 
     // Booking status breakdown
     const bookingsByStatus = isAgent 
-      ? db.prepare('SELECT status, COUNT(*) as count FROM bookings WHERE assigned_to = ? GROUP BY status').all(agentId) 
-      : db.prepare('SELECT status, COUNT(*) as count FROM bookings GROUP BY status').all();
+      ? await db.prepare('SELECT status, COUNT(*) as count FROM bookings WHERE assigned_to = ? GROUP BY status').all(agentId) 
+      : await db.prepare('SELECT status, COUNT(*) as count FROM bookings GROUP BY status').all();
 
     // Recent activity (last 10 items across all tables)
     const recentBookings = isAgent 
-      ? db.prepare("SELECT 'booking' as type, b.booking_ref as ref, b.customer_name as name, b.status, b.created_at, b.assigned_to, u.name as assigned_name FROM bookings b LEFT JOIN users u ON b.assigned_to = u.id WHERE b.assigned_to = ? ORDER BY b.created_at DESC LIMIT 5").all(agentId) 
-      : db.prepare("SELECT 'booking' as type, b.booking_ref as ref, b.customer_name as name, b.status, b.created_at, b.assigned_to, u.name as assigned_name FROM bookings b LEFT JOIN users u ON b.assigned_to = u.id ORDER BY b.created_at DESC LIMIT 5").all();
+      ? await db.prepare("SELECT 'booking' as type, b.booking_ref as ref, b.customer_name as name, b.status, b.created_at, b.assigned_to, u.name as assigned_name FROM bookings b LEFT JOIN users u ON b.assigned_to = u.id WHERE b.assigned_to = ? ORDER BY b.created_at DESC LIMIT 5").all(agentId) 
+      : await db.prepare("SELECT 'booking' as type, b.booking_ref as ref, b.customer_name as name, b.status, b.created_at, b.assigned_to, u.name as assigned_name FROM bookings b LEFT JOIN users u ON b.assigned_to = u.id ORDER BY b.created_at DESC LIMIT 5").all();
       
     const recentVisas = isAgent 
-      ? db.prepare("SELECT 'visa' as type, v.app_ref as ref, v.customer_name as name, v.status, v.created_at, v.assigned_to, u.name as assigned_name FROM visa_applications v LEFT JOIN users u ON v.assigned_to = u.id WHERE v.assigned_to = ? ORDER BY v.created_at DESC LIMIT 5").all(agentId) 
-      : db.prepare("SELECT 'visa' as type, v.app_ref as ref, v.customer_name as name, v.status, v.created_at, v.assigned_to, u.name as assigned_name FROM visa_applications v LEFT JOIN users u ON v.assigned_to = u.id ORDER BY v.created_at DESC LIMIT 5").all();
+      ? await db.prepare("SELECT 'visa' as type, v.app_ref as ref, v.customer_name as name, v.status, v.created_at, v.assigned_to, u.name as assigned_name FROM visa_applications v LEFT JOIN users u ON v.assigned_to = u.id WHERE v.assigned_to = ? ORDER BY v.created_at DESC LIMIT 5").all(agentId) 
+      : await db.prepare("SELECT 'visa' as type, v.app_ref as ref, v.customer_name as name, v.status, v.created_at, v.assigned_to, u.name as assigned_name FROM visa_applications v LEFT JOIN users u ON v.assigned_to = u.id ORDER BY v.created_at DESC LIMIT 5").all();
       
     const recentRequests = isAgent 
-      ? db.prepare("SELECT 'service_request' as type, s.ref, s.name, s.status, s.created_at, s.assigned_to, u.name as assigned_name FROM service_requests s LEFT JOIN users u ON s.assigned_to = u.id WHERE s.assigned_to = ? ORDER BY s.created_at DESC LIMIT 5").all(agentId) 
-      : db.prepare("SELECT 'service_request' as type, s.ref, s.name, s.status, s.created_at, s.assigned_to, u.name as assigned_name FROM service_requests s LEFT JOIN users u ON s.assigned_to = u.id ORDER BY s.created_at DESC LIMIT 5").all();
+      ? await db.prepare("SELECT 'service_request' as type, s.ref, s.name, s.status, s.created_at, s.assigned_to, u.name as assigned_name FROM service_requests s LEFT JOIN users u ON s.assigned_to = u.id WHERE s.assigned_to = ? ORDER BY s.created_at DESC LIMIT 5").all(agentId) 
+      : await db.prepare("SELECT 'service_request' as type, s.ref, s.name, s.status, s.created_at, s.assigned_to, u.name as assigned_name FROM service_requests s LEFT JOIN users u ON s.assigned_to = u.id ORDER BY s.created_at DESC LIMIT 5").all();
 
     const recentActivity = [...recentBookings, ...recentVisas, ...recentRequests]
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
@@ -151,12 +156,12 @@ router.get('/dashboard', authenticate, adminOnly, (req, res) => {
 });
 
 // GET /api/analytics/settings - Get business settings
-router.get('/settings', authenticate, adminOnly, (req, res) => {
+router.get('/settings', authenticate, adminOnly, async (req, res) => {
   if (req.user.sub_role === 'agent') {
     return res.status(403).json({ error: 'Access denied. Administrator rights required.' });
   }
   try {
-    const rows = db.prepare('SELECT key, value FROM settings').all();
+    const rows = await db.prepare('SELECT key, value FROM settings').all();
     const settings = {};
     rows.forEach(r => { settings[r.key] = r.value; });
     res.json(settings);
@@ -166,14 +171,14 @@ router.get('/settings', authenticate, adminOnly, (req, res) => {
 });
 
 // PUT /api/analytics/settings - Save business settings
-router.put('/settings', authenticate, adminOnly, (req, res) => {
+router.put('/settings', authenticate, adminOnly, async (req, res) => {
   if (req.user.sub_role === 'agent') {
     return res.status(403).json({ error: 'Access denied. Administrator rights required.' });
   }
   try {
-    const stmt = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
+    const stmt = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value');
     for (const [key, value] of Object.entries(req.body)) {
-      stmt.run(key, String(value));
+      await stmt.run(key, String(value));
     }
     res.json({ message: 'Settings saved.' });
   } catch (error) {
@@ -182,9 +187,9 @@ router.put('/settings', authenticate, adminOnly, (req, res) => {
 });
 
 // GET /api/analytics/settings/public - Get public settings (no auth required)
-router.get('/settings/public', (req, res) => {
+router.get('/settings/public', async (req, res) => {
   try {
-    const rows = db.prepare('SELECT key, value FROM settings').all();
+    const rows = await db.prepare('SELECT key, value FROM settings').all();
     const settings = {};
     rows.forEach(r => { settings[r.key] = r.value; });
     res.json(settings);
