@@ -23,33 +23,12 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    // Set initial loading based on session fetch
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        localStorage.setItem('bt_token', session.access_token);
-        // Get user profile from backend (backend will auto-provision or load user by email)
-        api.get('/auth/me')
-          .then(data => setUser(data.user))
-          .catch(() => {
-            supabase.auth.signOut();
-            localStorage.removeItem('bt_token');
-          })
-          .finally(() => setLoading(false));
-      } else {
-        // Fallback check if they had a local token but no Supabase session (e.g. admin)
-        const token = localStorage.getItem('bt_token');
-        if (token) {
-          api.get('/auth/me')
-            .then(data => setUser(data.user))
-            .catch(() => localStorage.removeItem('bt_token'))
-            .finally(() => setLoading(false));
-        } else {
-          setLoading(false);
-        }
-      }
-    });
+    // Detect if we're returning from an OAuth redirect (URL has code or access_token)
+    const url = new URL(window.location.href);
+    const hasOAuthCallback = url.searchParams.has('code') || url.hash.includes('access_token');
 
-    // Listen for auth state changes
+    // Listen for auth state changes FIRST so we don't miss the OAuth callback event
+    let oauthResolved = false;
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session) {
         localStorage.setItem('bt_token', session.access_token);
@@ -61,11 +40,43 @@ export function AuthProvider({ children }) {
           localStorage.removeItem('bt_token');
           setUser(null);
         }
+        oauthResolved = true;
+        setLoading(false);
       } else {
         if (event === 'SIGNED_OUT') {
           localStorage.removeItem('bt_token');
           setUser(null);
         }
+      }
+    });
+
+    // Then check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        localStorage.setItem('bt_token', session.access_token);
+        api.get('/auth/me')
+          .then(data => setUser(data.user))
+          .catch(() => {
+            supabase.auth.signOut();
+            localStorage.removeItem('bt_token');
+          })
+          .finally(() => setLoading(false));
+      } else if (!hasOAuthCallback) {
+        // Only set loading=false immediately if we're NOT in an OAuth callback
+        const token = localStorage.getItem('bt_token');
+        if (token) {
+          api.get('/auth/me')
+            .then(data => setUser(data.user))
+            .catch(() => localStorage.removeItem('bt_token'))
+            .finally(() => setLoading(false));
+        } else {
+          setLoading(false);
+        }
+      } else {
+        // We're in an OAuth callback — give onAuthStateChange up to 5s to resolve
+        setTimeout(() => {
+          if (!oauthResolved) setLoading(false);
+        }, 5000);
       }
     });
 
@@ -76,12 +87,20 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     if (supabase) {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-      localStorage.setItem('bt_token', data.session.access_token);
-      const profile = await api.get('/auth/me');
-      setUser(profile.user);
-      return profile;
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        localStorage.setItem('bt_token', data.session.access_token);
+        const profile = await api.get('/auth/me');
+        setUser(profile.user);
+        return profile;
+      } catch (supabaseErr) {
+        // Fallback to direct backend login (for admin/staff accounts not in Supabase Auth)
+        const data = await api.post('/auth/login', { email, password });
+        localStorage.setItem('bt_token', data.token);
+        setUser(data.user);
+        return data;
+      }
     } else {
       const data = await api.post('/auth/login', { email, password });
       localStorage.setItem('bt_token', data.token);
@@ -135,13 +154,25 @@ export function AuthProvider({ children }) {
     return data;
   };
 
+  const loginWithGoogle = async () => {
+    if (!supabase) throw new Error('Supabase is not initialized');
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`
+      }
+    });
+    if (error) throw error;
+    return data;
+  };
+
   const loginWithToken = (token, userData) => {
     localStorage.setItem('bt_token', token);
     setUser(userData);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateProfile, loginWithToken }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, updateProfile, loginWithToken, loginWithGoogle }}>
       {children}
     </AuthContext.Provider>
   );

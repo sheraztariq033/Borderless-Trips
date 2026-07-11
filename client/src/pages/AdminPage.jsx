@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
 import { useSettings } from '../context/SettingsContext';
+import { supabase } from '../utils/supabase';
 import {
   LayoutDashboard, Package, FileText, Users, MessageSquare, PenSquare,
   Settings, LogOut, TrendingUp, DollarSign, Search, Bell,
@@ -16,18 +17,24 @@ import {
 const tabs = [
   { id:'dashboard', label:'Dashboard', icon:LayoutDashboard },
   { id:'queue', label:'Service Queue', icon:Inbox },
+  { id:'leads', label:'Lead Pipeline', icon:TrendingUp },
+  { id:'consultations', label:'Consultations', icon:Calendar },
   { id:'bookings', label:'Bookings', icon:Package },
   { id:'visa', label:'Visa Apps', icon:FileText },
+  { id:'future-leads', label:'Future Leads', icon:Clock },
   { id:'customers', label:'Customers', icon:Users },
   { id:'doc-templates', label:'Doc Templates', icon:ClipboardList },
   { id:'inquiries', label:'Inquiries', icon:MessageSquare },
   { id:'messages', label:'Messages', icon:Send },
   { id:'packages', label:'Packages', icon:PenSquare },
+  { id:'campaigns', label:'Campaigns', icon:Mail },
   { id:'blog', label:'Blog', icon:Globe },
+  { id:'media', label:'Media Library', icon:Image },
   { id:'flights', label:'Flight Reqs', icon:Plane },
   { id:'countries', label:'Countries', icon:Flag },
   { id:'staff', label:'Staff', icon:UserPlus },
   { id:'newsletter', label:'Newsletter', icon:Mail },
+  { id:'audit', label:'Audit Trail', icon:Shield },
   { id:'settings', label:'Settings', icon:Settings },
 ];
 
@@ -112,6 +119,14 @@ const getArrayField = (val) => {
     }
   }
   return [];
+};
+
+const formatBytes = (bytes) => {
+  if (bytes === 0 || !bytes) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
 function CaseExtensions({ detailModal, setDetailModal, loadAllData, user, showToast, handleFileUpload }) {
@@ -441,6 +456,152 @@ function CaseExtensions({ detailModal, setDetailModal, loadAllData, user, showTo
           }}>Add Public Comment</button>
         </div>
       </div>
+
+      {/* Internal Staff Chat Threads */}
+      <div style={{ borderTop:'1px solid var(--color-border)', paddingTop:20, marginTop:10 }}>
+        <h4 style={{ fontSize:14, fontWeight:700, marginBottom:4, display:'flex', alignItems:'center', gap:6 }}>
+          💬 Internal Staff Note Thread (Private)
+        </h4>
+        <p className="text-muted" style={{ fontSize:11, marginBottom:12 }}>
+          Discuss application nuances or coordination issues here. Clients cannot see this thread.
+        </p>
+
+        <div style={{ display:'flex', flexDirection:'column', gap:8, maxHeight:200, overflowY:'auto', background:'var(--color-bg)', padding:12, borderRadius:8, border:'1px solid var(--color-border)', marginBottom:10 }}>
+          {(() => {
+            const [internalNotes, setInternalNotes] = useState([]);
+            const [newNoteText, setNewNoteText] = useState('');
+            const [notesLoading, setNotesLoading] = useState(false);
+
+            const loadInternalNotes = async () => {
+              try {
+                const ref = data.booking_ref || data.app_ref;
+                if (!ref) return;
+                const res = await api.get(`/business-suite/internal-notes/${ref}`);
+                setInternalNotes(res || []);
+              } catch (err) {
+                console.error('Failed to load internal notes:', err);
+              }
+            };
+
+            useEffect(() => {
+              loadInternalNotes();
+            }, [data.booking_ref, data.app_ref]);
+
+            const handleAddInternalNote = async (e) => {
+              e.preventDefault();
+              if (!newNoteText.trim()) return;
+              setNotesLoading(true);
+              try {
+                const ref = data.booking_ref || data.app_ref;
+                const res = await api.post(`/business-suite/internal-notes/${ref}`, { note: newNoteText.trim() });
+                setInternalNotes([...internalNotes, res.note]);
+                setNewNoteText('');
+              } catch (err) {
+                showToast(err.message, 'error');
+              } finally {
+                setNotesLoading(false);
+              }
+            };
+
+            return (
+              <>
+                <div style={{ display:'flex', flexDirection:'column', gap:8, overflowY:'auto', maxHeight:150 }}>
+                  {internalNotes.length > 0 ? internalNotes.map((note, idx) => (
+                    <div key={idx} style={{ fontSize:12, borderBottom:'1px solid var(--color-border)', paddingBottom:6 }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', color:'var(--color-text-muted)', fontSize:10, marginBottom:2 }}>
+                        <strong>👤 {note.created_by_name} ({note.created_by_role})</strong>
+                        <span>{new Date(note.created_at).toLocaleString()}</span>
+                      </div>
+                      <p style={{ margin:0, color:'var(--color-text)' }}>{note.note}</p>
+                    </div>
+                  )) : (
+                    <div className="text-muted" style={{ fontSize:11, textAlign:'center', padding:'10px 0' }}>No staff comments posted yet.</div>
+                  )}
+                </div>
+
+                <form onSubmit={handleAddInternalNote} style={{ display:'flex', gap:8, borderTop:'1px solid var(--color-border)', paddingTop:10, marginTop:10 }}>
+                  <input className="form-input" style={{ fontSize:12, height:34 }} placeholder="Type note for staff..." value={newNoteText} onChange={e => setNewNoteText(e.target.value)} required disabled={notesLoading}/>
+                  <button type="submit" className="btn btn-primary btn-sm" style={{ height:34 }} disabled={notesLoading}>Send</button>
+                </form>
+              </>
+            );
+          })()}
+        </div>
+      </div>
+
+      {/* Save as Future Travel Plan option */}
+      <div style={{ borderTop:'1px solid var(--color-border)', paddingTop:20, marginTop:10 }}>
+        <h4 style={{ fontSize:14, fontWeight:700, marginBottom:4, display:'flex', alignItems:'center', gap:6 }}>
+          📅 Convert to Future Travel Lead Plan
+        </h4>
+        <p className="text-muted" style={{ fontSize:11, marginBottom:12 }}>
+          Create a future scheduled travel lead from this customer record for pipeline tracking.
+        </p>
+
+        {(() => {
+          const [openForm, setOpenForm] = useState(false);
+          const [fDest, setFDest] = useState(data.country || '');
+          const [fDate, setFDate] = useState('');
+          const [fNotes, setFNotes] = useState(`Converted from travel file ${data.booking_ref || data.app_ref}.`);
+          const [saving, setSaving] = useState(false);
+
+          const handleSubmit = async (e) => {
+            e.preventDefault();
+            if (!fDate) return;
+            setSaving(true);
+            try {
+              await api.post('/business-suite/future-leads', {
+                name: data.customer_name || data.name,
+                email: data.customer_email || data.email,
+                phone: data.customer_phone || data.phone || '',
+                destination: fDest,
+                intended_travel_date: fDate,
+                notes: fNotes
+              });
+              showToast('Registered as future travel plan successfully!');
+              setOpenForm(false);
+              await loadAllData();
+            } catch (err) {
+              showToast(err.message, 'error');
+            } finally {
+              setSaving(false);
+            }
+          };
+
+          if (!openForm) {
+            return (
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => setOpenForm(true)}>
+                Save as Future Travel Plan
+              </button>
+            );
+          }
+
+          return (
+            <form onSubmit={handleSubmit} style={{ display:'flex', flexDirection:'column', gap:10, background:'var(--color-bg)', padding:14, borderRadius:8, border:'1px solid var(--color-border)' }}>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontSize:11 }}>Destination</label>
+                  <input className="form-input" style={{ fontSize:12, height:34 }} value={fDest} onChange={e => setFDest(e.target.value)} required/>
+                </div>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontSize:11 }}>Intended Travel Date</label>
+                  <input type="date" className="form-input" style={{ fontSize:12, height:34 }} value={fDate} onChange={e => setFDate(e.target.value)} required/>
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label" style={{ fontSize:11 }}>Timeline & Coordination Notes</label>
+                <textarea className="form-input" rows="2" style={{ fontSize:12 }} value={fNotes} onChange={e => setFNotes(e.target.value)}/>
+              </div>
+              <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+                <button type="button" className="btn btn-ghost btn-xs" onClick={() => setOpenForm(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary btn-xs" disabled={saving}>
+                  {saving ? 'Saving...' : 'Register Future Plan'}
+                </button>
+              </div>
+            </form>
+          );
+        })()}
+      </div>
     </div>
   );
 }
@@ -465,7 +626,7 @@ export default function AdminPage() {
 
   const visibleTabs = tabs.filter(tab => {
     if (user?.sub_role === 'agent') {
-      const hiddenTabs = ['customers', 'doc-templates', 'packages', 'blog', 'countries', 'staff', 'newsletter', 'settings'];
+      const hiddenTabs = ['customers', 'doc-templates', 'packages', 'blog', 'countries', 'staff', 'newsletter', 'settings', 'audit'];
       return !hiddenTabs.includes(tab.id);
     }
     return true;
@@ -487,6 +648,10 @@ export default function AdminPage() {
   const [inquiries, setInquiries] = useState([]);
   const [packages, setPackages] = useState([]);
   const [blogPosts, setBlogPosts] = useState([]);
+  const [mediaFiles, setMediaFiles] = useState([]);
+  const [creatingFutureLead, setCreatingFutureLead] = useState(false);
+  const [fForm, setFForm] = useState({ name: '', email: '', phone: '', destination: '', intended_travel_date: '', notes: '' });
+  const [savingFutureLead, setSavingFutureLead] = useState(false);
   const [flightReqs, setFlightReqs] = useState([]);
   const [flightRates, setFlightRates] = useState([]);
   const [flightRatesSubTab, setFlightRatesSubTab] = useState('requests');
@@ -504,6 +669,18 @@ export default function AdminPage() {
   const [countries, setCountries] = useState([]);
   const [staffList, setStaffList] = useState([]);
   const [businessSettings, setBusinessSettings] = useState({});
+  const [auditLogs, setAuditLogs] = useState([]);
+  
+  // Business Expansion Suite states
+  const [leads, setLeads] = useState([]);
+  const [consultations, setConsultations] = useState([]);
+  const [campaigns, setCampaigns] = useState([]);
+  const [newCampaign, setNewCampaign] = useState({ subject: '', body: '', target_role: 'subscribers' });
+  const [submittingCampaign, setSubmittingCampaign] = useState(false);
+  const [futureLeads, setFutureLeads] = useState([]);
+  const [internalNotes, setInternalNotes] = useState([]);
+  const [internalNotesInput, setInternalNotesInput] = useState('');
+
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -560,10 +737,10 @@ export default function AdminPage() {
 
   const showToast = (msg, type='success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
 
-  const loadAllData = useCallback(async () => {
+  const loadAllData = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
-      const [dashData, bkData, vsData, custData, inqData, pkgData, blogData, flData, subData, convData, ctryData, stfData, settData, templData, ratesData, fldData] = await Promise.all([
+      if (!silent) setLoading(true);
+      const [dashData, bkData, vsData, custData, inqData, pkgData, blogData, flData, subData, convData, ctryData, stfData, settData, templData, ratesData, fldData, auditData, leadsData, consultationsData, campaignsData, futureLeadsData, mediaData] = await Promise.all([
         api.get('/analytics/dashboard').catch(() => null),
         api.get('/bookings').catch(() => []),
         api.get('/visa/applications').catch(() => []),
@@ -580,6 +757,12 @@ export default function AdminPage() {
         api.get('/document-templates').catch(() => []),
         api.get('/flights/rates').catch(() => []),
         api.get('/document-templates/folders').catch(() => []),
+        api.get('/analytics/audit-logs').catch(() => []),
+        api.get('/business-suite/analytics/leads').catch(() => ({ leads: [] })),
+        api.get('/business-suite/consultations').catch(() => []),
+        api.get('/business-suite/campaigns').catch(() => []),
+        api.get('/business-suite/future-leads').catch(() => []),
+        api.get('/media').catch(() => []),
       ]);
       if (dashData) setStats(dashData);
       setBookings(bkData);
@@ -597,6 +780,12 @@ export default function AdminPage() {
       setBusinessSettings(settData);
       if (templData) setDocTemplates(templData);
       if (fldData) setCustomFolders(fldData);
+      if (auditData) setAuditLogs(auditData);
+      setLeads(leadsData?.leads || []);
+      setConsultations(consultationsData);
+      setCampaigns(campaignsData);
+      setFutureLeads(futureLeadsData);
+      setMediaFiles(mediaData);
     } catch (err) { console.error('Admin data load error:', err); }
     finally { setLoading(false); }
   }, []);
@@ -617,6 +806,28 @@ export default function AdminPage() {
 
   useEffect(() => { if (user?.role === 'admin') loadAllData(); }, [user, loadAllData]);
   useEffect(() => { if (activeTab === 'queue' && user?.role === 'admin') loadServiceReqs(1, statusFilter); }, [activeTab, statusFilter, loadServiceReqs, user]);
+
+  useEffect(() => {
+    if (!supabase || !user || user.role !== 'admin') return;
+
+    const channel = supabase
+      .channel('admin-realtime-messages')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+        loadAllData(true);
+        // If we are currently viewing this specific conversation, refresh its messages
+        if (selectedConvo && payload.new && (payload.new.sender_id === selectedConvo.user_id || payload.new.receiver_id === selectedConvo.user_id)) {
+          api.get(`/messages?user_id=${selectedConvo.user_id}`).then(setChatMessages).catch(() => {});
+        }
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
+        loadAllData(true);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loadAllData, selectedConvo]);
 
   // Chat
   useEffect(() => {
@@ -655,6 +866,87 @@ export default function AdminPage() {
     try { await api.put(`/service-requests/${id}`, updates); showToast('Request updated'); await loadServiceReqs(srPage, statusFilter); } catch (err) { showToast(err.message, 'error'); }
   };
 
+  // Business Expansion Suite Handlers
+  const handleUpdateLeadStage = async (leadId, type, newStage) => {
+    try {
+      const endpoint = type === 'sr' 
+        ? `/business-suite/service-requests/${leadId}/lead-stage` 
+        : `/business-suite/inquiries/${leadId}/lead-stage`;
+      await api.put(endpoint, { lead_stage: newStage });
+      showToast('Lead stage updated successfully');
+      await loadAllData(true);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleCreateCampaign = async (e) => {
+    e.preventDefault();
+    setSubmittingCampaign(true);
+    try {
+      await api.post('/business-suite/campaigns', newCampaign);
+      setNewCampaign({ subject: '', body: '', target_role: 'subscribers' });
+      showToast('Draft campaign created successfully');
+      await loadAllData(true);
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setSubmittingCampaign(false);
+    }
+  };
+
+  const handleSendCampaign = async (campaignId) => {
+    if (!confirm('Are you sure you want to blast this campaign to all recipients?')) return;
+    try {
+      showToast('Campaign blast initiated...');
+      await api.post(`/business-suite/campaigns/${campaignId}/send`);
+      showToast('Campaign sent successfully!');
+      await loadAllData(true);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleUpdateConsultation = async (id, status) => {
+    try {
+      await api.put(`/business-suite/consultations/${id}`, { status });
+      showToast('Appointment updated');
+      await loadAllData(true);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleUpdateFutureLead = async (id, status, notes) => {
+    try {
+      await api.put(`/business-suite/future-leads/${id}`, { status, notes });
+      showToast('Future travel lead status updated');
+      await loadAllData(true);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const fetchInternalNotes = async (ref) => {
+    try {
+      const data = await api.get(`/business-suite/internal-notes/${ref}`);
+      setInternalNotes(data);
+    } catch (err) {
+      console.error('Failed to load internal notes:', err);
+    }
+  };
+
+  const handleSendInternalNote = async (ref) => {
+    if (!internalNotesInput.trim()) return;
+    try {
+      const data = await api.post(`/business-suite/internal-notes/${ref}`, { note: internalNotesInput.trim() });
+      setInternalNotes([...internalNotes, data.note]);
+      setInternalNotesInput('');
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
   const handleConvertSR = async (sr) => {
     if (!confirm(`Are you sure you want to convert this service request to a live ${sr.service_type === 'visa' ? 'Visa Application' : 'Booking'}? This will also automatically ensure the client has an active customer account.`)) return;
     try {
@@ -663,6 +955,18 @@ export default function AdminPage() {
       setDetailModal(null);
       await loadAllData();
       await loadServiceReqs(srPage, statusFilter);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleConvertInquiry = async (inq, targetType) => {
+    if (!confirm(`Are you sure you want to convert this Inquiry to a live ${targetType === 'visa' ? 'Visa Application' : 'Booking'}? This will also automatically ensure the client has an active customer account.`)) return;
+    try {
+      const res = await api.post(`/inquiries/${inq.id}/convert`, { target_type: targetType });
+      showToast(res.message);
+      setDetailModal(null);
+      await loadAllData();
     } catch (err) {
       showToast(err.message, 'error');
     }
@@ -912,6 +1216,17 @@ export default function AdminPage() {
   };
   const handleDeleteBlog = async (id) => { if (!confirm('Delete this post?')) return; try { await api.delete(`/blog/${id}`); showToast('Post deleted'); await loadAllData(); } catch (err) { showToast(err.message, 'error'); } };
 
+  const handleDeleteMedia = async (id) => {
+    if (!confirm('Are you sure you want to permanently delete this file from storage and database? This may break any packages or blogs using this link.')) return;
+    try {
+      await api.delete(`/media/${id}`);
+      showToast('File deleted successfully');
+      await loadAllData();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
   // Country CRUD
   const handleSaveCountry = async () => {
     try { await api.post('/countries', countryForm); showToast('Country added'); setCountryModal(false); setCountryForm({ name:'', code:'', region:'schengen', visa_required:1 }); await loadAllData(); } catch (err) { showToast(err.message, 'error'); }
@@ -1139,8 +1454,8 @@ export default function AdminPage() {
   const kpis = [
     { label:'Total Bookings', value:stats?.kpis?.totalBookings || bookings.length, icon:Package, color:'#0ea5e9', sub:`${stats?.thisWeek?.bookings||0} this week` },
     { label:'Revenue', value:`£${(stats?.kpis?.revenue||0).toLocaleString()}`, icon:DollarSign, color:'#10b981', sub:`£${(stats?.thisWeek?.revenue||0).toLocaleString()} this week` },
-    { label:'New Requests', value:stats?.kpis?.newServiceReqs || 0, icon:Inbox, color:'#f59e0b', sub:`${stats?.thisWeek?.todayRequests||0} today` },
-    { label:'Customers', value:stats?.kpis?.totalCustomers || customers.length, icon:Users, color:'#d4a574', sub:`${stats?.kpis?.activeInquiries||0} active inquiries` },
+    { label:'Conversion Rate', value:`${stats?.kpis?.conversionRate || 0}%`, icon:TrendingUp, color:'#8b5cf6', sub:'Leads to sales conversion' },
+    { label:'Visa Processing', value:`${stats?.kpis?.avgVisaProcessingTime || 0} days`, icon:Clock, color:'#d946ef', sub:'Avg successful visa time' },
     { label:'Pending Visas', value:stats?.kpis?.pendingVisas || 0, icon:Shield, color:'#6366f1', sub:`${stats?.kpis?.totalVisaApps||0} total` },
     { label:'Unread Messages', value:stats?.kpis?.unreadMsgs || totalUnreadMsgs, icon:MessageSquare, color:'#ef4444', sub:`${subscribers.length} subscribers` },
   ];
@@ -1199,6 +1514,30 @@ export default function AdminPage() {
                       <h1 className="heading-2">Dashboard</h1>
                       <button className="btn btn-ghost btn-sm" onClick={loadAllData}><RefreshCw size={14}/> Refresh</button>
                     </div>
+
+                    {/* Warning Alerts for Quotas */}
+                    {stats?.quotas && Object.entries(stats.quotas).some(([key, q]) => q.percentage >= 70) && (
+                      <div style={{
+                        display:'flex', gap:12, background:'rgba(239, 68, 68, 0.08)',
+                        border:'1px solid rgba(239, 68, 68, 0.2)', color:'var(--color-danger)',
+                        padding:'16px 20px', borderRadius:'var(--radius-lg)', marginBottom:24,
+                        alignItems:'center', boxShadow:'var(--shadow-sm)'
+                      }}>
+                        <AlertCircle size={20} style={{ flexShrink:0 }}/>
+                        <div>
+                          <div style={{ fontWeight:700, fontSize:13 }}>Attention Required: Approaching Service Free-Tier Limits!</div>
+                          <div style={{ fontSize:12, marginTop:2 }}>
+                            {Object.entries(stats.quotas)
+                              .filter(([key, q]) => q.percentage >= 70)
+                              .map(([key, q]) => {
+                                const name = key === 'db' ? 'Supabase Database Size' : key === 'r2' ? 'Cloudflare R2 Storage' : 'Supabase Auth Users';
+                                return `${name} is currently at ${q.percentage}% capacity.`;
+                              }).join(' ')}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:16, marginBottom:32 }}>
                       {kpis.map((s,i) => (
                         <div key={i} className="card" style={{ padding:20 }}>
@@ -1216,23 +1555,159 @@ export default function AdminPage() {
                       ))}
                     </div>
 
-                    {/* Recent Activity */}
-                    <h3 className="heading-4" style={{ marginBottom:12 }}>Recent Activity</h3>
-                    <div className="card" style={{ overflow:'hidden' }}>
-                      {stats?.recentActivity?.length > 0 ? stats.recentActivity.map((item,i,arr) => (
-                        <div key={i} style={{ padding:'12px 16px', borderBottom:i<arr.length-1?'1px solid var(--color-border)':'none', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                          <div style={{ display:'flex', gap:10, alignItems:'center' }}>
-                            <div style={{ width:32, height:32, borderRadius:8, background:item.type==='booking'?'#0ea5e914':item.type==='visa'?'#6366f114':'#f59e0b14', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                              {item.type==='booking'?<Package size={14} color="#0ea5e9"/>:item.type==='visa'?<Shield size={14} color="#6366f1"/>:<ClipboardList size={14} color="#f59e0b"/>}
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(350px, 1fr))', gap:24 }}>
+                      <div>
+                        {/* Recent Activity */}
+                        <h3 className="heading-4" style={{ marginBottom:12 }}>Recent Activity</h3>
+                        <div className="card" style={{ overflow:'hidden' }}>
+                          {stats?.recentActivity?.length > 0 ? stats.recentActivity.map((item,i,arr) => (
+                            <div key={i} style={{ padding:'12px 16px', borderBottom:i<arr.length-1?'1px solid var(--color-border)':'none', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                              <div style={{ display:'flex', gap:10, alignItems:'center' }}>
+                                <div style={{ width:32, height:32, borderRadius:8, background:item.type==='booking'?'#0ea5e914':item.type==='visa'?'#6366f114':'#f59e0b14', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                                  {item.type==='booking'?<Package size={14} color="#0ea5e9"/>:item.type==='visa'?<Shield size={14} color="#6366f1"/>:<ClipboardList size={14} color="#f59e0b"/>}
+                                </div>
+                                <div>
+                                  <div style={{ fontWeight:600, fontSize:13 }}>{item.name}</div>
+                                  <div className="text-muted" style={{ fontSize:11 }}>{item.ref} · {new Date(item.created_at).toLocaleDateString()}</div>
+                                </div>
+                              </div>
+                              <StatusBadge status={item.status}/>
                             </div>
-                            <div>
-                              <div style={{ fontWeight:600, fontSize:13 }}>{item.name}</div>
-                              <div className="text-muted" style={{ fontSize:11 }}>{item.ref} · {new Date(item.created_at).toLocaleDateString()}</div>
+                          )) : <div style={{ padding:30, textAlign:'center', color:'var(--color-text-muted)' }}>No recent activity</div>}
+                        </div>
+                      </div>
+
+                      <div>
+                        {/* Service Usage & Quotas */}
+                        <h3 className="heading-4" style={{ marginBottom:12 }}>Service Usage & Free Tier Quotas</h3>
+                        <div className="card" style={{ padding:24 }}>
+                          {stats?.quotas ? (
+                            <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+                              {/* Database size */}
+                              <div>
+                                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6, fontSize:12, fontWeight:600 }}>
+                                  <span>Supabase Database Size</span>
+                                  <span style={{ color: stats.quotas.db.percentage >= 70 ? 'var(--color-danger)' : 'var(--color-text-muted)' }}>
+                                    {formatBytes(stats.quotas.db.used)} / {formatBytes(stats.quotas.db.limit)} ({stats.quotas.db.percentage}%)
+                                  </span>
+                                </div>
+                                <div style={{ height:8, background:'var(--color-border)', borderRadius:4, overflow:'hidden' }}>
+                                  <div style={{
+                                    height:'100%',
+                                    width: `${stats.quotas.db.percentage}%`,
+                                    background: stats.quotas.db.percentage >= 85 ? 'var(--color-danger)' : stats.quotas.db.percentage >= 70 ? '#f59e0b' : '#10b981',
+                                    borderRadius:4,
+                                    transition: 'width 0.5s ease'
+                                  }} />
+                                </div>
+                              </div>
+
+                              {/* Cloudflare R2 */}
+                              <div>
+                                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6, fontSize:12, fontWeight:600 }}>
+                                  <span>Cloudflare R2 Storage</span>
+                                  <span style={{ color: stats.quotas.r2.percentage >= 70 ? 'var(--color-danger)' : 'var(--color-text-muted)' }}>
+                                    {formatBytes(stats.quotas.r2.used)} / {formatBytes(stats.quotas.r2.limit)} ({stats.quotas.r2.percentage}%)
+                                  </span>
+                                </div>
+                                <div style={{ height:8, background:'var(--color-border)', borderRadius:4, overflow:'hidden' }}>
+                                  <div style={{
+                                    height:'100%',
+                                    width: `${stats.quotas.r2.percentage}%`,
+                                    background: stats.quotas.r2.percentage >= 85 ? 'var(--color-danger)' : stats.quotas.r2.percentage >= 70 ? '#f59e0b' : '#10b981',
+                                    borderRadius:4,
+                                    transition: 'width 0.5s ease'
+                                  }} />
+                                </div>
+                                <div style={{ fontSize:10, color:'var(--color-text-muted)', marginTop:4 }}>
+                                  {stats.quotas.r2.configured ? `Active Connection (${stats.quotas.r2.objectsCount} files stored)` : 'R2 not configured'}
+                                </div>
+                              </div>
+
+                              {/* Auth / Users */}
+                              <div>
+                                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6, fontSize:12, fontWeight:600 }}>
+                                  <span>Supabase Auth (DB Users)</span>
+                                  <span style={{ color: stats.quotas.auth.percentage >= 70 ? 'var(--color-danger)' : 'var(--color-text-muted)' }}>
+                                    {stats.quotas.auth.used.toLocaleString()} / {stats.quotas.auth.limit.toLocaleString()} MAU ({stats.quotas.auth.percentage}%)
+                                  </span>
+                                </div>
+                                <div style={{ height:8, background:'var(--color-border)', borderRadius:4, overflow:'hidden' }}>
+                                  <div style={{
+                                    height:'100%',
+                                    width: `${stats.quotas.auth.percentage}%`,
+                                    background: stats.quotas.auth.percentage >= 85 ? 'var(--color-danger)' : stats.quotas.auth.percentage >= 70 ? '#f59e0b' : '#10b981',
+                                    borderRadius:4,
+                                    transition: 'width 0.5s ease'
+                                  }} />
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ textAlign:'center', color:'var(--color-text-muted)' }}>No quota metrics available</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Advanced Business Analytics breakdowns */}
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(300px, 1fr))', gap:24, marginTop:24 }}>
+                      <div className="card" style={{ padding:20 }}>
+                        <h3 style={{ fontSize:14, fontWeight:700, marginBottom:12, display:'flex', alignItems:'center', gap:6 }}>
+                          📈 Monthly Revenue (Paid Bookings)
+                        </h3>
+                        {stats?.breakdowns?.monthlyRevenue?.length > 0 ? (
+                          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                            {stats.breakdowns.monthlyRevenue.map((r, i) => (
+                              <div key={i} style={{ display:'flex', justifyContent:'space-between', fontSize:13, paddingBottom:6, borderBottom:'1px solid var(--color-border)' }}>
+                                <span style={{ fontFamily:'monospace' }}>{r.month}</span>
+                                <span style={{ fontWeight:700 }}>£{parseFloat(r.total || '0').toLocaleString()}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-muted" style={{ fontSize:12, textAlign:'center', padding:'20px 0' }}>No revenue records yet.</div>
+                        )}
+                      </div>
+
+                      <div className="card" style={{ padding:20 }}>
+                        <h3 style={{ fontSize:14, fontWeight:700, marginBottom:12, display:'flex', alignItems:'center', gap:6 }}>
+                          🌍 Top Visa Destination Countries
+                        </h3>
+                        {stats?.breakdowns?.topCountries?.length > 0 ? (
+                          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                            {stats.breakdowns.topCountries.map((c, i) => (
+                              <div key={i} style={{ display:'flex', justifyContent:'space-between', fontSize:13, paddingBottom:6, borderBottom:'1px solid var(--color-border)' }}>
+                                <span>{c.country}</span>
+                                <span className="text-muted" style={{ fontWeight:600 }}>{c.count} applications</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-muted" style={{ fontSize:12, textAlign:'center', padding:'20px 0' }}>No visa requests logged.</div>
+                        )}
+                      </div>
+
+                      <div className="card" style={{ padding:20 }}>
+                        <h3 style={{ fontSize:14, fontWeight:700, marginBottom:12, display:'flex', alignItems:'center', gap:6 }}>
+                          ⭐ Satisfaction Ratings & Feedback
+                        </h3>
+                        {stats?.breakdowns?.surveyStats?.totalResponses > 0 ? (
+                          <div style={{ textAlign:'center', padding:'10px 0' }}>
+                            <div style={{ fontSize:36, fontWeight:800, color:'var(--color-secondary)' }}>
+                              {stats.breakdowns.surveyStats.avgRating} / 5.0
+                            </div>
+                            <p className="text-muted" style={{ fontSize:12, marginTop:6 }}>
+                              Based on {stats.breakdowns.surveyStats.totalResponses} customer feedback ratings
+                            </p>
+                            <div style={{ display:'flex', justifyContent:'center', gap:2, color:'var(--color-secondary)', fontSize:18, marginTop:8 }}>
+                              {Array.from({ length: Math.round(stats.breakdowns.surveyStats.avgRating) }).map((_, i) => '⭐').join('')}
                             </div>
                           </div>
-                          <StatusBadge status={item.status}/>
-                        </div>
-                      )) : <div style={{ padding:30, textAlign:'center', color:'var(--color-text-muted)' }}>No recent activity</div>}
+                        ) : (
+                          <div className="text-muted" style={{ fontSize:12, textAlign:'center', padding:'20px 0' }}>No customer surveys submitted yet.</div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1988,6 +2463,148 @@ export default function AdminPage() {
                   </div>
                 )}
 
+                {/* ===== MEDIA LIBRARY ===== */}
+                {activeTab === 'media' && (
+                  <div>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+                      <div>
+                        <h1 className="heading-2" style={{ margin:0 }}>Media Library</h1>
+                        <p className="text-muted" style={{ fontSize:12, marginTop:4 }}>Upload files to use as covers, logos, or attachments in your campaigns, blogs, or packages.</p>
+                      </div>
+                      <div>
+                        <label className="btn btn-primary btn-sm" style={{ cursor:'pointer' }}>
+                          <Plus size={14}/> Upload Files
+                          <input 
+                            type="file" 
+                            multiple 
+                            accept="image/*,video/*,application/pdf" 
+                            style={{ display:'none' }} 
+                            onChange={async (e) => {
+                              if (!e.target.files.length) return;
+                              setLoading(true);
+                              let successCount = 0;
+                              for (let file of e.target.files) {
+                                const formData = new FormData();
+                                formData.append('file', file);
+                                try {
+                                  await api.upload('/upload', formData);
+                                  successCount++;
+                                } catch (uploadErr) {
+                                  showToast(`Failed to upload ${file.name}: ${uploadErr.message}`, 'error');
+                                }
+                              }
+                              if (successCount > 0) {
+                                showToast(`Successfully uploaded ${successCount} file(s)`);
+                                await loadAllData(true);
+                              }
+                              setLoading(false);
+                            }}
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="card" style={{ padding:20, background:'var(--color-bg-card)', borderRadius:12 }}>
+                      {mediaFiles.length === 0 ? (
+                        <div style={{ textAlign:'center', padding:'40px 20px', color:'var(--color-text-muted)' }}>
+                          <Image size={40} style={{ opacity:0.5, marginBottom:12 }} />
+                          <h3 style={{ fontSize:16, fontWeight:600, color:'var(--color-text)' }}>Your Media Library is empty</h3>
+                          <p style={{ fontSize:13, maxWidth:350, margin:'4px auto 0' }}>Upload images, itineraries or PDFs here, then copy their URLs to link them anywhere in the application.</p>
+                        </div>
+                      ) : (
+                        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))', gap:16 }}>
+                          {mediaFiles.map((file) => {
+                            const isImage = file.mimetype.startsWith('image/');
+                            return (
+                              <div 
+                                key={file.id} 
+                                className="card" 
+                                style={{ 
+                                  display:'flex', 
+                                  flexDirection:'column', 
+                                  borderRadius:8, 
+                                  overflow:'hidden', 
+                                  border:'1px solid var(--color-border)',
+                                  background:'var(--color-surface)',
+                                  position:'relative',
+                                  height:230
+                                }}
+                              >
+                                {/* Preview Panel */}
+                                <div style={{ 
+                                  height:110, 
+                                  background:'var(--color-bg)', 
+                                  display:'flex', 
+                                  alignItems:'center', 
+                                  justifyContent:'center',
+                                  overflow:'hidden',
+                                  borderBottom:'1px solid var(--color-border)'
+                                }}>
+                                  {isImage ? (
+                                    <img 
+                                      src={file.url} 
+                                      alt={file.original_name} 
+                                      style={{ width:'100%', height:'100%', objectFit:'cover' }} 
+                                    />
+                                  ) : (
+                                    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
+                                      <FileText size={32} color="var(--color-primary)" />
+                                      <span style={{ fontSize:9, fontWeight:600, color:'var(--color-text-muted)' }}>{file.mimetype.split('/')[1]?.toUpperCase()}</span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Content Details */}
+                                <div style={{ padding:10, flex:1, display:'flex', flexDirection:'column', justifyContent:'space-between' }}>
+                                  <div>
+                                    <h4 
+                                      style={{ 
+                                        fontSize:12, 
+                                        fontWeight:600, 
+                                        margin:0, 
+                                        whiteSpace:'nowrap', 
+                                        overflow:'hidden', 
+                                        textOverflow:'ellipsis',
+                                        color:'var(--color-text-title)'
+                                      }}
+                                      title={file.original_name}
+                                    >
+                                      {file.original_name}
+                                    </h4>
+                                    <span style={{ fontSize:10, color:'var(--color-text-muted)' }}>
+                                      {(file.size / 1024).toFixed(1)} KB
+                                    </span>
+                                  </div>
+
+                                  <div style={{ display:'flex', gap:6, marginTop:8 }}>
+                                    <button 
+                                      className="btn btn-outline btn-xs" 
+                                      style={{ flex:1, fontSize:10, padding:'4px 6px' }}
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(window.location.origin + file.url);
+                                        showToast('Link copied to clipboard!');
+                                      }}
+                                    >
+                                      Copy URL
+                                    </button>
+                                    <button 
+                                      className="btn btn-outline btn-xs btn-danger" 
+                                      style={{ padding:'4px 6px', color:'var(--color-danger)', borderColor:'var(--color-border-danger)' }}
+                                      onClick={() => handleDeleteMedia(file.id)}
+                                    >
+                                      <Trash2 size={12} />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* ===== FLIGHTS ===== */}
                 {activeTab === 'flights' && (
                   <div>
@@ -2430,6 +3047,367 @@ export default function AdminPage() {
                   </div>
                 )}
 
+                {/* ===== AUDIT TRAIL ===== */}
+                {activeTab === 'audit' && (
+                  <div>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+                      <h1 className="heading-2">System Audit Trail</h1>
+                      <button className="btn btn-outline btn-sm" onClick={loadAllData} style={{ display:'flex', alignItems:'center', gap:6 }}>
+                        <RefreshCw size={14}/> Refresh Logs
+                      </button>
+                    </div>
+                    <div className="card admin-table-wrap">
+                      <table className="admin-table">
+                        <thead>
+                          <tr>
+                            {['Timestamp', 'User', 'Action', 'Details'].map(h => <th key={h}>{h}</th>)}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {auditLogs.map((log, i) => (
+                            <tr key={i}>
+                              <td style={{ fontSize:12, whiteSpace:'nowrap', color:'var(--color-text-muted)' }}>
+                                {new Date(log.created_at).toLocaleString()}
+                              </td>
+                              <td>
+                                <div style={{ fontWeight:600, fontSize:13 }}>{log.user_name || 'System / Guest'}</div>
+                                <div className="text-muted" style={{ fontSize:11 }}>{log.user_email || '-'}</div>
+                              </td>
+                              <td>
+                                <span className={`status-pill`} style={{ 
+                                  background: log.action.includes('delete') ? 'rgba(239, 68, 68, 0.1)' : log.action.includes('create') ? 'rgba(16, 185, 129, 0.1)' : 'rgba(99, 102, 241, 0.1)',
+                                  color: log.action.includes('delete') ? '#ef4444' : log.action.includes('create') ? '#10b981' : '#6366f1',
+                                  padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 700, textTransform: 'capitalize'
+                                }}>
+                                  {log.action.replace(/_/g, ' ')}
+                                </span>
+                              </td>
+                              <td style={{ fontSize:12, fontFamily:'monospace', maxWidth: 400, wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
+                                {JSON.stringify(JSON.parse(log.details_json || '{}'), null, 2)}
+                              </td>
+                            </tr>
+                          ))}
+                          {auditLogs.length === 0 && (
+                            <tr>
+                              <td colSpan={4} style={{ textAlign:'center', padding:40, color:'var(--color-text-muted)' }}>
+                                No audit events logged yet.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* ===== LEAD PIPELINE KANBAN BOARD ===== */}
+                {activeTab === 'leads' && (
+                  <div>
+                    <h1 className="heading-2" style={{ marginBottom:24 }}>Lead Pipeline & Scoring</h1>
+                    
+                    <div style={{ display:'flex', gap:16, overflowX:'auto', paddingBottom:16 }}>
+                      {['new', 'contacted', 'proposal', 'won', 'lost'].map(stage => {
+                        const stageLeads = leads.filter(l => (l.lead_stage || 'new') === stage);
+                        return (
+                          <div key={stage} style={{ flex:'1 0 280px', background:'var(--color-bg-alt)', borderRadius:12, padding:16, border:'1px solid var(--color-border)' }}>
+                            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
+                              <h3 style={{ textTransform:'uppercase', fontSize:12, fontWeight:700, color:'var(--color-text)' }}>
+                                {stage}
+                              </h3>
+                              <span style={{ fontSize:11, fontWeight:700, padding:'2px 8px', background:'var(--color-border)', borderRadius:12 }}>
+                                {stageLeads.length}
+                              </span>
+                            </div>
+                            
+                            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                              {stageLeads.map(lead => (
+                                <div key={`${lead.type}-${lead.id}`} className="card" style={{ padding:14, cursor:'pointer' }}>
+                                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+                                    <span style={{ fontSize:10, fontWeight:700, background: lead.lead_score >= 80 ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)', color: lead.lead_score >= 80 ? '#10b981' : '#f59e0b', padding:'2px 6px', borderRadius:4 }}>
+                                      Score: {lead.lead_score}
+                                    </span>
+                                    <span className="text-muted" style={{ fontSize:10 }}>
+                                      {lead.service_type || 'Visa'}
+                                    </span>
+                                  </div>
+                                  <h4 style={{ fontWeight:700, fontSize:13, color:'var(--color-text)' }}>{lead.name}</h4>
+                                  <p className="text-muted" style={{ fontSize:11, marginTop:2 }}>{lead.email}</p>
+                                  {lead.phone && <p className="text-muted" style={{ fontSize:11 }}>{lead.phone}</p>}
+                                  
+                                  <div style={{ display:'flex', gap:6, marginTop:12, borderTop:'1px solid var(--color-border)', paddingTop:8, justifyContent:'flex-end' }}>
+                                    {stage !== 'contacted' && <button className="btn btn-outline btn-xs" style={{ fontSize:9 }} onClick={() => handleUpdateLeadStage(lead.id, lead.type, 'contacted')}>Contact</button>}
+                                    {stage !== 'proposal' && <button className="btn btn-outline btn-xs" style={{ fontSize:9 }} onClick={() => handleUpdateLeadStage(lead.id, lead.type, 'proposal')}>Proposal</button>}
+                                    {stage !== 'won' && <button className="btn btn-primary btn-xs" style={{ fontSize:9 }} onClick={() => handleUpdateLeadStage(lead.id, lead.type, 'won')}>Won</button>}
+                                    {stage !== 'lost' && <button className="btn btn-ghost btn-xs" style={{ fontSize:9, color:'var(--color-danger)' }} onClick={() => handleUpdateLeadStage(lead.id, lead.type, 'lost')}>Lost</button>}
+                                  </div>
+                                </div>
+                              ))}
+                              {stageLeads.length === 0 && (
+                                <div style={{ fontSize:11, color:'var(--color-text-muted)', textAlign:'center', padding:'20px 0', border:'2px dashed var(--color-border)', borderRadius:8 }}>
+                                  No leads in this stage
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* ===== CONSULTATIONS SCHEDULER ===== */}
+                {activeTab === 'consultations' && (
+                  <div>
+                    <h1 className="heading-2" style={{ marginBottom:24 }}>Consultation Appointments</h1>
+                    
+                    <div className="card admin-table-wrap">
+                      <table className="admin-table">
+                        <thead>
+                          <tr>
+                            {['Customer', 'Reason / Title', 'Scheduled Slot', 'Duration', 'Status', 'Actions'].map(h => <th key={h}>{h}</th>)}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {consultations.map((c, i) => (
+                            <tr key={i}>
+                              <td>
+                                <div style={{ fontWeight:600 }}>{c.customer_name || 'Guest User'}</div>
+                                <div className="text-muted" style={{ fontSize:11 }}>{c.customer_email || '-'}</div>
+                              </td>
+                              <td style={{ fontWeight:600 }}>{c.title}</td>
+                              <td>{new Date(c.scheduled_at).toLocaleString()}</td>
+                              <td>{c.duration} mins</td>
+                              <td>
+                                <span className="status-pill" style={{
+                                  background: c.status === 'scheduled' ? 'rgba(245,158,11,0.1)' : (c.status === 'completed' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'),
+                                  color: c.status === 'scheduled' ? '#f59e0b' : (c.status === 'completed' ? '#10b981' : '#ef4444'),
+                                  padding:'3px 8px', borderRadius:10, fontSize:11, fontWeight:700
+                                }}>
+                                  {c.status}
+                                </span>
+                              </td>
+                              <td>
+                                <div style={{ display:'flex', gap:6 }}>
+                                  {c.status === 'scheduled' && (
+                                    <>
+                                      <button className="btn btn-primary btn-xs" onClick={() => handleUpdateConsultation(c.id, 'completed')}>Complete</button>
+                                      <button className="btn btn-outline btn-xs" style={{ color:'var(--color-danger)' }} onClick={() => handleUpdateConsultation(c.id, 'cancelled')}>Cancel</button>
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                          {consultations.length === 0 && (
+                            <tr>
+                              <td colSpan={6} style={{ textAlign:'center', padding:40, color:'var(--color-text-muted)' }}>
+                                No consultations booked.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* ===== MARKETING CAMPAIGNS ===== */}
+                {activeTab === 'campaigns' && (
+                  <div>
+                    <h1 className="heading-2" style={{ marginBottom:24 }}>Email Marketing Campaigns</h1>
+                    
+                    <div style={{ display:'grid', gridTemplateColumns:'1.2fr 1.8fr', gap:24 }}>
+                      <div className="card" style={{ padding:24, height:'fit-content' }}>
+                        <h3 style={{ fontSize:15, fontWeight:700, marginBottom:16 }}>Create Email Campaign</h3>
+                        <form onSubmit={handleCreateCampaign} style={{ display:'flex', flexDirection:'column', gap:14 }}>
+                          <div className="form-group">
+                            <label className="form-label">Subject Line</label>
+                            <input className="form-input" placeholder="e.g. Exclusive Schengen Holiday Packages 2026!" value={newCampaign.subject} onChange={e => setNewCampaign({ ...newCampaign, subject: e.target.value })} required/>
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label">Target Audience</label>
+                            <select className="form-input" value={newCampaign.target_role} onChange={e => setNewCampaign({ ...newCampaign, target_role: e.target.value })}>
+                              <option value="subscribers">Newsletter Subscribers Only</option>
+                              <option value="customers">Registered Portal Customers Only</option>
+                              <option value="all">Everyone (Subscribers + Customers)</option>
+                            </select>
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label">Campaign Message Body</label>
+                            <textarea className="form-input" rows="8" placeholder="Write HTML or plain text campaign details..." value={newCampaign.body} onChange={e => setNewCampaign({ ...newCampaign, body: e.target.value })} required/>
+                          </div>
+                          <button type="submit" className="btn btn-primary" disabled={submittingCampaign}>
+                            {submittingCampaign ? 'Saving...' : 'Save Draft Campaign'}
+                          </button>
+                        </form>
+                      </div>
+
+                      <div>
+                        <h3 className="heading-4" style={{ marginBottom:12 }}>Campaign Lists</h3>
+                        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                          {campaigns.map((camp, idx) => (
+                            <div key={idx} className="card" style={{ padding:20 }}>
+                              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                                <div>
+                                  <h4 style={{ fontWeight:700, fontSize:15 }}>{camp.subject}</h4>
+                                  <p className="text-muted" style={{ fontSize:11, marginTop:4 }}>
+                                    Audience: <strong style={{ textTransform:'capitalize' }}>{camp.target_role}</strong>
+                                  </p>
+                                </div>
+                                <span className="status-pill" style={{
+                                  background: camp.status === 'draft' ? 'var(--color-border)' : 'rgba(16,185,129,0.1)',
+                                  color: camp.status === 'draft' ? 'var(--color-text-muted)' : '#10b981',
+                                  padding:'3px 8px', borderRadius:10, fontSize:11, fontWeight:700
+                                }}>
+                                  {camp.status}
+                                </span>
+                              </div>
+                              <p className="text-muted" style={{ fontSize:12, marginTop:10, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>
+                                {camp.body}
+                              </p>
+                              <div style={{ display:'flex', gap:10, marginTop:14, justifyContent:'space-between', alignItems:'center', borderTop:'1px solid var(--color-border)', paddingTop:12 }}>
+                                <span style={{ fontSize:10, color:'var(--color-text-muted)' }}>
+                                  Created: {new Date(camp.created_at).toLocaleDateString()}
+                                </span>
+                                {camp.status === 'draft' && (
+                                  <button className="btn btn-primary btn-xs" onClick={() => handleSendCampaign(camp.id)}>
+                                    Send Email Blast
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                          {campaigns.length === 0 && (
+                            <div className="card" style={{ padding:40, textAlign:'center', color:'var(--color-text-muted)' }}>
+                              No campaigns created yet.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ===== FUTURE LEADS TRACKER ===== */}
+                {activeTab === 'future-leads' && (() => {
+                  const handleSave = async (e) => {
+                    e.preventDefault();
+                    setSavingFutureLead(true);
+                    try {
+                      await api.post('/business-suite/future-leads', fForm);
+                      showToast('Future travel plan created successfully!');
+                      setFForm({ name: '', email: '', phone: '', destination: '', intended_travel_date: '', notes: '' });
+                      setCreatingFutureLead(false);
+                      await loadAllData();
+                    } catch (err) {
+                      showToast(err.message, 'error');
+                    } finally {
+                      setSavingFutureLead(false);
+                    }
+                  };
+
+                  return (
+                    <div>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:24 }}>
+                        <h1 className="heading-2" style={{ margin:0 }}>Future Travel Leads</h1>
+                        <button className="btn btn-primary" onClick={() => setCreatingFutureLead(true)}>Add Future Travel Plan</button>
+                      </div>
+
+                      {creatingFutureLead && (
+                        <div className="card" style={{ padding:24, marginBottom:24 }}>
+                          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+                            <h3 style={{ fontSize:15, fontWeight:700, margin:0 }}>New Future Travel Plan</h3>
+                            <button className="btn btn-ghost btn-sm" onClick={() => setCreatingFutureLead(false)}>Close</button>
+                          </div>
+                          <form onSubmit={handleSave} style={{ display:'flex', flexDirection:'column', gap:14 }}>
+                            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:12 }}>
+                              <div className="form-group">
+                                <label className="form-label">Client Name *</label>
+                                <input className="form-input" value={fForm.name} onChange={e => setFForm({ ...fForm, name: e.target.value })} required/>
+                              </div>
+                              <div className="form-group">
+                                <label className="form-label">Client Email *</label>
+                                <input type="email" className="form-input" value={fForm.email} onChange={e => setFForm({ ...fForm, email: e.target.value })} required/>
+                              </div>
+                              <div className="form-group">
+                                <label className="form-label">Client Phone</label>
+                                <input className="form-input" value={fForm.phone} onChange={e => setFForm({ ...fForm, phone: e.target.value })}/>
+                              </div>
+                            </div>
+                            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+                              <div className="form-group">
+                                <label className="form-label">Destination Country / City</label>
+                                <input className="form-input" placeholder="e.g. France, Tokyo" value={fForm.destination} onChange={e => setFForm({ ...fForm, destination: e.target.value })} required/>
+                              </div>
+                              <div className="form-group">
+                                <label className="form-label">Intended Travel Date</label>
+                                <input type="date" className="form-input" value={fForm.intended_travel_date} onChange={e => setFForm({ ...fForm, intended_travel_date: e.target.value })} required/>
+                              </div>
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label">Specific requests or notes for this future trip</label>
+                              <textarea className="form-input" rows="2" placeholder="Describe the future trip timeline and coordination notes..." value={fForm.notes} onChange={e => setFForm({ ...fForm, notes: e.target.value })}/>
+                            </div>
+                            <button type="submit" className="btn btn-primary" style={{ alignSelf:'flex-start' }} disabled={savingFutureLead}>
+                              {savingFutureLead ? 'Creating...' : 'Create Future Plan'}
+                            </button>
+                          </form>
+                        </div>
+                      )}
+                      
+                      <div className="card admin-table-wrap">
+                        <table className="admin-table">
+                          <thead>
+                            <tr>
+                              {['Lead Details', 'Intended Travel', 'Follow Up', 'Notes', 'Status', 'Actions'].map(h => <th key={h}>{h}</th>)}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {futureLeads.map((lead, i) => (
+                              <tr key={i}>
+                                <td>
+                                  <div style={{ fontWeight:600 }}>{lead.name}</div>
+                                  <div className="text-muted" style={{ fontSize:11 }}>{lead.email} • {lead.phone || '-'}</div>
+                                </td>
+                                <td style={{ fontWeight:600 }}>{lead.destination || 'Anywhere'} ({lead.intended_travel_date})</td>
+                                <td style={{ color:'var(--color-secondary)', fontWeight:700 }}>{lead.follow_up_date}</td>
+                                <td style={{ fontSize:12, maxWidth:200, wordBreak:'break-word' }}>{lead.notes}</td>
+                                <td>
+                                  <span className="status-pill" style={{
+                                    background: lead.status === 'pending' ? 'rgba(245,158,11,0.1)' : (lead.status === 'converted' ? 'rgba(16,185,129,0.1)' : 'rgba(148,163,184,0.1)'),
+                                    color: lead.status === 'pending' ? '#f59e0b' : (lead.status === 'converted' ? '#10b981' : '#94a3b8'),
+                                    padding:'3px 8px', borderRadius:10, fontSize:11, fontWeight:700
+                                  }}>
+                                    {lead.status}
+                                  </span>
+                                </td>
+                                <td>
+                                  <div style={{ display:'flex', gap:6 }}>
+                                    {lead.status === 'pending' && (
+                                      <>
+                                        <button className="btn btn-primary btn-xs" onClick={() => handleUpdateFutureLead(lead.id, 'converted')}>Convert</button>
+                                        <button className="btn btn-outline btn-xs" onClick={() => handleUpdateFutureLead(lead.id, 'contacted')}>Contacted</button>
+                                        <button className="btn btn-ghost btn-xs" style={{ color:'var(--color-danger)' }} onClick={() => handleUpdateFutureLead(lead.id, 'ignored')}>Ignore</button>
+                                      </>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                            {futureLeads.length === 0 && (
+                              <tr>
+                                <td colSpan={6} style={{ textAlign:'center', padding:40, color:'var(--color-text-muted)' }}>
+                                  No future leads scheduled.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })()}
+
               </motion.div>
             </AnimatePresence>
           )}
@@ -2714,7 +3692,7 @@ export default function AdminPage() {
       </Modal>
 
       {/* Detail Modal */}
-      <Modal open={!!detailModal} onClose={() => setDetailModal(null)} title={detailModal?.type==='sr'?`Request ${detailModal?.data?.ref}`:detailModal?.type==='booking'?`Booking ${detailModal?.data?.booking_ref}`:`Visa ${detailModal?.data?.app_ref}`} wide>
+      <Modal open={!!detailModal} onClose={() => setDetailModal(null)} title={detailModal?.type==='sr'?`Request ${detailModal?.data?.ref}`:detailModal?.type==='booking'?`Booking ${detailModal?.data?.booking_ref}`:detailModal?.type==='inquiry'?`Inquiry #${detailModal?.data?.id}`:`Visa ${detailModal?.data?.app_ref}`} wide>
         {detailModal && (
           <div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
@@ -3111,6 +4089,47 @@ export default function AdminPage() {
                   >
                     <RefreshCw size={14}/> Move to {detailModal.data.service_type === 'visa' ? 'Visa Applications' : 'Bookings'}
                   </button>
+                </div>
+              </div>
+            )}
+
+            {detailModal.type === 'inquiry' && detailModal.data.status !== 'completed' && detailModal.data.status !== 'cancelled' && (
+              <div style={{ marginTop:24, borderTop:'1px solid var(--color-border)', paddingTop:20 }}>
+                <h4 style={{ fontSize:14, fontWeight:700, marginBottom:12, display:'flex', alignItems:'center', gap:6 }}>
+                  ⚡ Workflow Actions
+                </h4>
+                <div style={{ background:'rgba(255,255,255,0.02)', padding:16, borderRadius:12, border:'1px solid var(--color-border)', display:'flex', flexDirection:'column', gap:12 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:'1px solid var(--color-border-alt)', paddingBottom:12 }}>
+                    <div>
+                      <div style={{ fontWeight:600, fontSize:13 }}>Convert to Visa Application</div>
+                      <div className="text-muted" style={{ fontSize:11, marginTop:2 }}>
+                        Create a formal visa application file and login credentials for this customer.
+                      </div>
+                    </div>
+                    <button 
+                      className="btn btn-primary btn-sm"
+                      onClick={() => handleConvertInquiry(detailModal.data, 'visa')}
+                      style={{ display:'flex', alignItems:'center', gap:6 }}
+                    >
+                      <RefreshCw size={14}/> Convert to Visa Application
+                    </button>
+                  </div>
+
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                    <div>
+                      <div style={{ fontWeight:600, fontSize:13 }}>Convert to Package Booking</div>
+                      <div className="text-muted" style={{ fontSize:11, marginTop:2 }}>
+                        Create a holiday package or general booking record and customer credentials.
+                      </div>
+                    </div>
+                    <button 
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => handleConvertInquiry(detailModal.data, 'booking')}
+                      style={{ display:'flex', alignItems:'center', gap:6 }}
+                    >
+                      <RefreshCw size={14}/> Convert to Booking
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

@@ -3,6 +3,7 @@ const router = Router = express.Router();
 const db = require('../models/database');
 const { authenticate, adminOnly } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
+const { logAudit } = require('../utils/audit');
 
 function generateBookingRef() {
   const num = Math.floor(100000 + Math.random() * 900000);
@@ -120,7 +121,7 @@ router.post('/', async (req, res) => {
         travel_date, travelers, total_price, status, payment_status, notes, admin_notes, 
         travelers_json, payment_info_json, payment_proof, comments_json
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', ?, '', ?, ?, '', '[]')
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'unpaid', ?, '', ?, ?, '', '[]')
     `).run(
       bookingRef, userId, packageId, pkg.title, name, emailLower, phone || '', 
       travelDate, parseInt(travelers) || 1, totalPrice, notes || '',
@@ -280,6 +281,11 @@ router.put('/:id', authenticate, async (req, res) => {
         if (labels[status]) {
           await db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)')
             .run(booking.user_id, `Booking ${labels[status]}`, `Your booking ${booking.booking_ref} has been ${labels[status].toLowerCase()}.`, status === 'cancelled' ? 'warning' : 'success');
+          
+          if (status === 'confirmed' || status === 'completed') {
+            const { creditBookingLoyaltyReward } = require('./business-suite');
+            creditBookingLoyaltyReward(id).catch(err => console.error('Loyalty reward credit failed:', err.message));
+          }
         }
       }
 
@@ -296,6 +302,12 @@ router.put('/:id', authenticate, async (req, res) => {
           notes: admin_notes || ''
         }).catch(err => console.error('Booking status email failed:', err));
       }
+
+      await logAudit(req.user.id, 'update_booking', {
+        booking_id: id,
+        booking_ref: booking.booking_ref,
+        changes: { status, payment_status, travel_date, travelers, assigned_to }
+      });
 
       res.json({ message: 'Booking updated.' });
     } else {
@@ -394,7 +406,12 @@ router.put('/:id/cancel', authenticate, async (req, res) => {
       notes: 'Cancelled by user.'
     }).catch(err => console.error('Booking status cancel email failed:', err));
 
-    res.json({ message: 'Booking cancelled.' });
+      await logAudit(req.user.id, 'cancel_booking', {
+        booking_id: id,
+        booking_ref: booking.booking_ref
+      });
+
+      res.json({ message: 'Booking cancelled.' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to cancel booking.' });
   }
@@ -408,6 +425,11 @@ router.delete('/:id', authenticate, adminOnly, async (req, res) => {
     if (!booking) return res.status(404).json({ error: 'Booking not found.' });
 
     await db.prepare('DELETE FROM bookings WHERE id = ?').run(id);
+    await logAudit(req.user.id, 'delete_booking', {
+      booking_id: id,
+      booking_ref: booking.booking_ref
+    });
+
     res.json({ message: 'Booking deleted.' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete booking.' });

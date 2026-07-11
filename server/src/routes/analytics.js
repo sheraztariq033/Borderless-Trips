@@ -139,15 +139,110 @@ router.get('/dashboard', authenticate, adminOnly, async (req, res) => {
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
       .slice(0, 10);
 
+    // Calculate database size
+    let dbSizeBytes = 0;
+    try {
+      const sizeResult = await db.prepare("SELECT pg_database_size(current_database()) as size").get();
+      dbSizeBytes = sizeResult ? parseInt(sizeResult.size || '0') : 0;
+    } catch (e) {
+      console.error('Failed to get database size:', e);
+    }
+
+    // Calculate R2 size
+    let r2SizeBytes = 0;
+    let r2ObjectsCount = 0;
+    let r2Configured = false;
+    try {
+      const { s3, BUCKET_NAME } = require('../utils/s3');
+      const { ListObjectsV2Command } = require('@aws-sdk/client-s3');
+      if (process.env.R2_ACCOUNT_ID && !process.env.R2_ACCOUNT_ID.startsWith('YOUR_')) {
+        r2Configured = true;
+        const command = new ListObjectsV2Command({ Bucket: BUCKET_NAME });
+        const response = await s3.send(command);
+        if (response.Contents) {
+          r2ObjectsCount = response.Contents.length;
+          for (const item of response.Contents) {
+            r2SizeBytes += item.Size;
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to get R2 size:', e);
+    }
+
+    const totalUsers = await runQuery("SELECT COUNT(*) as c FROM users");
+
+    const quotas = {
+      db: {
+        used: dbSizeBytes,
+        limit: 500 * 1024 * 1024, // 500MB
+        percentage: Math.min(100, Math.round((dbSizeBytes / (500 * 1024 * 1024)) * 100))
+      },
+      r2: {
+        configured: r2Configured,
+        used: r2SizeBytes,
+        objectsCount: r2ObjectsCount,
+        limit: 10 * 1024 * 1024 * 1024, // 10GB
+        percentage: Math.min(100, Math.round((r2SizeBytes / (10 * 1024 * 1024 * 1024)) * 100))
+      },
+      auth: {
+        used: totalUsers,
+        limit: 50000,
+        percentage: Math.min(100, Math.round((totalUsers / 50000) * 100))
+      }
+    };
+
+    // Advanced Business Suite KPI Queries
+    const monthlyRevenue = await db.prepare(`
+      SELECT 
+        TO_CHAR(created_at, 'YYYY-MM') as month,
+        SUM(total_price) as total
+      FROM bookings 
+      WHERE payment_status = 'paid' 
+      GROUP BY month 
+      ORDER BY month ASC
+    `).all().catch(() => []);
+
+    const wonCount = await runQuery("SELECT COUNT(*) as c FROM bookings WHERE status IN ('confirmed', 'completed')");
+    const totalLeads = (await runQuery("SELECT COUNT(*) as c FROM inquiries")) + (await runQuery("SELECT COUNT(*) as c FROM service_requests"));
+    const conversionRate = totalLeads > 0 ? parseFloat(((wonCount / totalLeads) * 100).toFixed(2)) : 0;
+
+    const topCountries = await db.prepare(`
+      SELECT country, COUNT(*) as count 
+      FROM visa_applications 
+      WHERE country IS NOT NULL AND country != '' 
+      GROUP BY country 
+      ORDER BY count DESC 
+      LIMIT 5
+    `).all().catch(() => []);
+
+    const avgTimeResult = await db.prepare(`
+      SELECT AVG(EXTRACT(EPOCH FROM (updated_at - created_at))/86400) as avg_days
+      FROM visa_applications
+      WHERE status IN ('approved', 'visa_successful')
+    `).get().catch(() => null);
+    const avgVisaProcessingTime = avgTimeResult && avgTimeResult.avg_days ? parseFloat(parseFloat(avgTimeResult.avg_days).toFixed(1)) : 0;
+
+    const surveyStatsResult = await db.prepare(`
+      SELECT COALESCE(AVG(rating), 0) as avg_rating, COUNT(*) as total_responses
+      FROM surveys
+    `).get().catch(() => ({ avg_rating: 0, total_responses: 0 }));
+    const surveyStats = {
+      avgRating: parseFloat(parseFloat(surveyStatsResult.avg_rating || 0).toFixed(2)),
+      totalResponses: parseInt(surveyStatsResult.total_responses || 0)
+    };
+
     res.json({
       kpis: {
         totalBookings, confirmedBookings, completedBookings, revenue,
         totalCustomers, activeInquiries, totalVisaApps, pendingVisas,
-        totalServiceReqs, newServiceReqs, totalFlightReqs, subscribers, unreadMsgs
+        totalServiceReqs, newServiceReqs, totalFlightReqs, subscribers, unreadMsgs,
+        conversionRate, avgVisaProcessingTime
       },
       thisWeek: { bookings: thisWeekBookings, revenue: thisWeekRevenue, requests: thisWeekRequests, todayRequests },
-      breakdowns: { reqByType, bookingsByStatus },
-      recentActivity
+      breakdowns: { reqByType, bookingsByStatus, monthlyRevenue, topCountries, surveyStats },
+      recentActivity,
+      quotas
     });
   } catch (error) {
     console.error('Analytics error:', error);
@@ -195,6 +290,22 @@ router.get('/settings/public', async (req, res) => {
     res.json(settings);
   } catch (error) {
     res.status(500).json({ error: 'Failed to load public settings.' });
+  }
+});
+
+// GET /api/analytics/audit-logs - Get audit logs (Admin Only)
+router.get('/audit-logs', authenticate, adminOnly, async (req, res) => {
+  try {
+    const logs = await db.prepare(`
+      SELECT a.*, u.name as user_name, u.email as user_email
+      FROM audit_logs a
+      LEFT JOIN users u ON a.user_id = u.id
+      ORDER BY a.created_at DESC
+      LIMIT 100
+    `).all();
+    res.json(logs);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to retrieve audit logs.' });
   }
 });
 

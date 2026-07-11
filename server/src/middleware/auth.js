@@ -16,7 +16,7 @@ async function authenticate(req, res, next) {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     const user = await db.prepare(`
-      SELECT u.id, u.name, u.email, u.phone, u.nationality, u.role, u.sub_role, u.profile_photo, u.created_at, u.assigned_to,
+      SELECT u.id, u.name, u.email, u.phone, u.nationality, u.role, u.sub_role, u.profile_photo, u.passport_expiry, u.created_at, u.assigned_to,
         a.name as assigned_name
       FROM users u
       LEFT JOIN users a ON u.assigned_to = a.id
@@ -37,7 +37,7 @@ async function authenticate(req, res, next) {
           
           // Lookup database user by email
           let dbUser = await db.prepare(`
-            SELECT u.id, u.name, u.email, u.phone, u.nationality, u.role, u.sub_role, u.profile_photo, u.created_at, u.assigned_to,
+            SELECT u.id, u.name, u.email, u.phone, u.nationality, u.role, u.sub_role, u.profile_photo, u.passport_expiry, u.created_at, u.assigned_to,
               a.name as assigned_name
             FROM users u
             LEFT JOIN users a ON u.assigned_to = a.id
@@ -59,7 +59,7 @@ async function authenticate(req, res, next) {
             ).run(name, email, placeholderHash, phone, nationality, 'customer', '');
             
             dbUser = await db.prepare(`
-              SELECT u.id, u.name, u.email, u.phone, u.nationality, u.role, u.sub_role, u.profile_photo, u.created_at, u.assigned_to,
+              SELECT u.id, u.name, u.email, u.phone, u.nationality, u.role, u.sub_role, u.profile_photo, u.passport_expiry, u.created_at, u.assigned_to,
                 a.name as assigned_name
               FROM users u
               LEFT JOIN users a ON u.assigned_to = a.id

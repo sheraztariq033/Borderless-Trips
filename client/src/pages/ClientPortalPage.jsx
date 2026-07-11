@@ -3,12 +3,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
+import { supabase } from '../utils/supabase';
 import {
   LayoutDashboard, FileText, Plane, Upload, User, Bell, LogOut, Clock,
   CheckCircle2, AlertCircle, Package, DollarSign, Send, MessageSquare,
   Plus, ChevronRight, Globe, Shield, Calendar, Users as UsersIcon,
   MapPin, X, ArrowRight, Download, Eye, Menu, ClipboardList,
-  Briefcase, Hotel, HelpCircle, Phone
+  Briefcase, Hotel, HelpCircle, Phone, Gift, PenTool, Award
 } from 'lucide-react';
 
 const tabs = [
@@ -18,6 +19,8 @@ const tabs = [
   { id:'request-service', label:'Request a Service', icon:ClipboardList },
   { id:'my-requests', label:'My Requests', icon:Briefcase },
   { id:'documents', label:'Documents', icon:Upload },
+  { id:'consultations', label:'Consultations', icon:Calendar },
+  { id:'referrals', label:'Referrals', icon:Gift },
   { id:'messages', label:'Support Chat', icon:MessageSquare },
   { id:'notifications', label:'Notifications', icon:Bell },
   { id:'profile', label:'Profile', icon:User },
@@ -67,7 +70,7 @@ const getArrayField = (val) => {
   return [];
 };
 
-function PortalCaseExtensions({ item, type, loadPortalData }) {
+function PortalCaseExtensions({ item, type, loadPortalData, setSigningFile, setActiveTab }) {
   const [uploading, setUploading] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editedTravelers, setEditedTravelers] = useState([]);
@@ -224,16 +227,23 @@ function PortalCaseExtensions({ item, type, loadPortalData }) {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {item.signature_link && (
-                <div style={{ fontSize: 12, background: 'rgba(245, 158, 11, 0.05)', border: '1px solid rgba(245,158,11,0.2)', padding: 12, borderRadius: 8 }}>
-                  <p style={{ margin: '0 0 10px 0', lineHeight: 1.4 }}>
-                    Please click the button below to sign the travel agreement digitally.
-                  </p>
-                  <a href={item.signature_link} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--color-secondary)', color: '#000', fontWeight: 'bold' }}>
-                    Sign Online Now
-                  </a>
+              <div style={{ fontSize: 12, background: 'rgba(245, 158, 11, 0.05)', border: '1px solid rgba(245,158,11,0.2)', padding: 12, borderRadius: 8 }}>
+                <p style={{ margin: '0 0 10px 0', lineHeight: 1.4 }}>
+                  Please click the button below to sign the travel agreement digitally.
+                </p>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {setSigningFile && (
+                    <button onClick={() => setSigningFile(item)} className="btn btn-primary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 'bold' }}>
+                      <PenTool size={12}/> Sign Document Here
+                    </button>
+                  )}
+                  {item.signature_link && (
+                    <a href={item.signature_link} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--color-secondary)', color: '#000', fontWeight: 'bold' }}>
+                      Sign Online Now
+                    </a>
+                  )}
                 </div>
-              )}
+              </div>
 
               {item.signature_doc && (
                 <div style={{ fontSize: 12, background: 'var(--color-bg)', border: '1px solid var(--color-border)', padding: 12, borderRadius: 8 }}>
@@ -254,6 +264,25 @@ function PortalCaseExtensions({ item, type, loadPortalData }) {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* 5. Satisfaction Survey Prompt */}
+      {(item.status === 'completed' || item.status === 'visa_successful' || item.status === 'approved') && (
+        <div style={{ background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: 10, padding: 16 }}>
+          <h4 style={{ fontSize:13, fontWeight:700, marginBottom:8, color:'var(--color-success)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            ⭐ Share Your Feedback
+          </h4>
+          <p style={{ margin: '0 0 10px 0', fontSize:12, lineHeight: 1.4 }}>
+            We'd love to hear about your experience! Please take a moment to submit a quick satisfaction rating.
+          </p>
+          <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+            <button className="btn btn-success btn-sm" onClick={() => {
+              setActiveTab('referrals');
+            }}>
+              Rate Our Service
+            </button>
+          </div>
         </div>
       )}
 
@@ -370,7 +399,7 @@ function PortalCaseExtensions({ item, type, loadPortalData }) {
 }
 
 export default function ClientPortalPage() {
-  const { user, logout, updateProfile } = useAuth();
+  const { user, loading: authLoading, logout, updateProfile } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [docSubTab, setDocSubTab] = useState('all');
@@ -387,7 +416,7 @@ export default function ClientPortalPage() {
 
   // Form states
   const [paymentRefs, setPaymentRefs] = useState({});
-  const [profileForm, setProfileForm] = useState({ name:'', phone:'', nationality:'' });
+  const [profileForm, setProfileForm] = useState({ name:'', phone:'', nationality:'', passport_expiry:'' });
   const [msgInput, setMsgInput] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState(false);
@@ -406,10 +435,35 @@ export default function ClientPortalPage() {
   const [submittingSR, setSubmittingSR] = useState(false);
   const [srSuccess, setSrSuccess] = useState(null);
 
-  const loadPortalData = async () => {
+  // Business Expansion Suite states
+  const [referralStats, setReferralStats] = useState(null);
+  const [refCodeInput, setRefCodeInput] = useState('');
+  const [applyingRef, setApplyingRef] = useState(false);
+  const [refSuccessMsg, setRefSuccessMsg] = useState('');
+  const [refErrorMsg, setRefErrorMsg] = useState('');
+
+  const [consultations, setConsultations] = useState([]);
+  const [bookingConsultation, setBookingConsultation] = useState(false);
+  const [submittingConsultation, setSubmittingConsultation] = useState(false);
+  const [consForm, setConsForm] = useState({ title: 'Visa Consultation', scheduled_at: '', duration: 30, notes: '' });
+
+  const [surveyForm, setSurveyForm] = useState({ ref: '', rating: 5, feedback: '' });
+  const [submittingSurvey, setSubmittingSurvey] = useState(false);
+  const [surveySuccess, setSurveySuccess] = useState(false);
+
+  const [futureIntentForm, setFutureIntentForm] = useState({ destination: '', intended_travel_date: '', notes: '' });
+  const [submittingFutureLead, setSubmittingFutureLead] = useState(false);
+  const [futureLeadSuccess, setFutureLeadSuccess] = useState(false);
+
+  const [signingFile, setSigningFile] = useState(null); // visa app or booking
+  const [signatureType, setSignatureType] = useState('typed'); // 'typed' or 'drawn'
+  const [typedSignature, setTypedSignature] = useState('');
+  const [submittingSignature, setSubmittingSignature] = useState(false);
+
+  const loadPortalData = async (silent = false) => {
     try {
-      setLoading(true);
-      const [bookingsData, visaData, msgsData, notifsData, unreadMsgData, unreadNotifData, srData, ctryData] = await Promise.all([
+      if (!silent) setLoading(true);
+      const [bookingsData, visaData, msgsData, notifsData, unreadMsgData, unreadNotifData, srData, ctryData, referralData, consultationsData] = await Promise.all([
         api.get('/bookings').catch(() => []),
         api.get('/visa/applications').catch(() => []),
         api.get('/messages').catch(() => []),
@@ -418,6 +472,8 @@ export default function ClientPortalPage() {
         api.get('/notifications/unread-count').catch(() => ({ count:0 })),
         api.get('/service-requests').catch(() => []),
         api.get('/countries').catch(() => []),
+        api.get('/business-suite/referrals/my-stats').catch(() => null),
+        api.get('/business-suite/consultations').catch(() => []),
       ]);
       setBookings(bookingsData);
       setVisaApps(visaData);
@@ -427,16 +483,134 @@ export default function ClientPortalPage() {
       setUnreadNotifs(unreadNotifData.count);
       setServiceRequests(Array.isArray(srData) ? srData : (srData.requests || []));
       setCountries(ctryData);
+      setReferralStats(referralData);
+      setConsultations(consultationsData);
     } catch (err) { console.error('Portal load error:', err); }
     finally { setLoading(false); }
   };
 
+  const handleApplyReferral = async (e) => {
+    e.preventDefault();
+    if (!refCodeInput.trim()) return;
+    setApplyingRef(true);
+    setRefSuccessMsg('');
+    setRefErrorMsg('');
+    try {
+      const data = await api.post('/business-suite/referrals/apply', { referral_code: refCodeInput.trim() });
+      setRefSuccessMsg(data.message);
+      setRefCodeInput('');
+      await loadPortalData(true);
+    } catch (err) {
+      setRefErrorMsg(err.message || 'Failed to apply referral code.');
+    } finally {
+      setApplyingRef(false);
+    }
+  };
+
+  const handleBookConsultation = async (e) => {
+    e.preventDefault();
+    if (!consForm.scheduled_at) return;
+    setSubmittingConsultation(true);
+    try {
+      await api.post('/business-suite/consultations', consForm);
+      setConsForm({ title: 'Visa Consultation', scheduled_at: '', duration: 30, notes: '' });
+      await loadPortalData(true);
+      alert('Consultation booked successfully!');
+      setBookingConsultation(false);
+    } catch (err) {
+      alert(err.message || 'Failed to book consultation.');
+    } finally {
+      setSubmittingConsultation(false);
+    }
+  };
+
+  const handleSurveySubmit = async (e) => {
+    e.preventDefault();
+    setSubmittingSurvey(true);
+    try {
+      await api.post('/business-suite/surveys', surveyForm);
+      setSurveySuccess(true);
+      setSurveyForm({ ref: '', rating: 5, feedback: '' });
+      setTimeout(() => setSurveySuccess(false), 5000);
+    } catch (err) {
+      alert(err.message || 'Failed to submit feedback.');
+    } finally {
+      setSubmittingSurvey(false);
+    }
+  };
+
+  const handleFutureLeadSubmit = async (e) => {
+    e.preventDefault();
+    setSubmittingFutureLead(true);
+    try {
+      await api.post('/business-suite/future-leads', {
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        destination: futureIntentForm.destination,
+        intended_travel_date: futureIntentForm.intended_travel_date,
+        notes: futureIntentForm.notes
+      });
+      setFutureLeadSuccess(true);
+      setFutureIntentForm({ destination: '', intended_travel_date: '', notes: '' });
+      setTimeout(() => setFutureLeadSuccess(false), 5000);
+    } catch (err) {
+      alert(err.message || 'Failed to register future travel.');
+    } finally {
+      setSubmittingFutureLead(false);
+    }
+  };
+
+  const handleSignatureSubmit = async (e) => {
+    e.preventDefault();
+    if (signatureType === 'typed' && !typedSignature.trim()) return;
+    setSubmittingSignature(true);
+    try {
+      const type = signingFile.app_ref ? 'visa' : 'bookings';
+      const ref = signingFile.app_ref || signingFile.booking_ref;
+      const signatureText = signatureType === 'typed' ? typedSignature : 'Drawn Signature (base64 placeholder)';
+      
+      await api.put(`/${type}/${signingFile.id}`, {
+        signature_link: signatureText,
+        signature_doc: `Agreement signed by ${user.name} on ${new Date().toLocaleDateString()}`,
+        signed_document_url: `/uploads/signed-${ref}.pdf`
+      });
+      
+      setSigningFile(null);
+      setTypedSignature('');
+      await loadPortalData(true);
+      alert('Document signed successfully!');
+    } catch (err) {
+      alert(err.message || 'Failed to sign document.');
+    } finally {
+      setSubmittingSignature(false);
+    }
+  };
+
   useEffect(() => {
     if (user) {
-      setProfileForm({ name: user.name||'', phone: user.phone||'', nationality: user.nationality||'' });
+      setProfileForm({ name: user.name||'', phone: user.phone||'', nationality: user.nationality||'', passport_expiry: user.passport_expiry||'' });
       setSrForm(f => ({ ...f, name: user.name||'', email: user.email||'', phone: user.phone||'' }));
       loadPortalData();
     }
+  }, [user]);
+
+  useEffect(() => {
+    if (!supabase || !user) return;
+
+    const channel = supabase
+      .channel(`portal-realtime-${user.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+        loadPortalData(true);
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
+        loadPortalData(true);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user]);
 
   // Auto-scroll chat
@@ -599,6 +773,15 @@ export default function ClientPortalPage() {
     } catch (err) { alert('Failed: ' + err.message); }
     finally { setSubmittingSR(false); }
   };
+
+  if (authLoading) {
+    return (
+      <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', paddingTop:'var(--nav-height)', flexDirection:'column', gap:16 }}>
+        <div className="portal-spinner"/>
+        <p className="text-muted" style={{ marginTop:16 }}>Authenticating...</p>
+      </div>
+    );
+  }
 
   if (!user) {
     return (
@@ -936,7 +1119,7 @@ export default function ClientPortalPage() {
                           </div>
                         )}
 
-                        <PortalCaseExtensions item={b} type="booking" loadPortalData={loadPortalData} />
+                        <PortalCaseExtensions item={b} type="booking" loadPortalData={loadPortalData} setSigningFile={setSigningFile} setActiveTab={setActiveTab} />
                       </div>
                     )) : (
                       <div className="card" style={{ padding:50, textAlign:'center' }}>
@@ -1307,7 +1490,7 @@ export default function ClientPortalPage() {
                             )}
                           </div>
 
-                          <PortalCaseExtensions item={v} type="visa" loadPortalData={loadPortalData} />
+                          <PortalCaseExtensions item={v} type="visa" loadPortalData={loadPortalData} setSigningFile={setSigningFile} setActiveTab={setActiveTab} />
                         </div>
                       );
                     }) : (
@@ -1505,6 +1688,41 @@ export default function ClientPortalPage() {
                         )}
                       </form>
                     )}
+
+                    {/* ===== FUTURE TRAVEL INTEREST CHECK-IN ===== */}
+                    <div className="card" style={{ padding:24, marginTop:24, border:'1px solid var(--color-border)', borderTop:'3px solid var(--color-secondary)' }}>
+                      <h3 style={{ fontSize:15, fontWeight:700, marginBottom:4, display:'flex', alignItems:'center', gap:6 }}>
+                        📅 Planning Future Travel?
+                      </h3>
+                      <p className="text-muted" style={{ fontSize:12, marginBottom:16 }}>
+                        Not traveling immediately? Save your intended future travel dates and destinations. We'll set a reminder to contact you at the perfect time to start planning!
+                      </p>
+                      {futureLeadSuccess ? (
+                        <div style={{ background:'rgba(16,185,129,0.08)', border:'1px solid rgba(16,185,129,0.2)', padding:'12px 16px', borderRadius:8, color:'var(--color-success)', fontSize:13 }}>
+                          Future travel plans registered! We'll keep track and get back to you at the right time.
+                        </div>
+                      ) : (
+                        <form onSubmit={handleFutureLeadSubmit} style={{ display:'flex', flexDirection:'column', gap:14 }}>
+                          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+                            <div className="form-group">
+                              <label className="form-label">Destination Country / City</label>
+                              <input className="form-input" placeholder="e.g. France, Tokyo" value={futureIntentForm.destination} onChange={e => setFutureIntentForm({ ...futureIntentForm, destination: e.target.value })} required/>
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label">Intended Travel Date</label>
+                              <input type="date" className="form-input" value={futureIntentForm.intended_travel_date} onChange={e => setFutureIntentForm({ ...futureIntentForm, intended_travel_date: e.target.value })} required/>
+                            </div>
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label">Specific requests or notes for this future trip</label>
+                            <textarea className="form-input" rows="2" placeholder="Tell us what you'd like to do or any milestones you're waiting for..." value={futureIntentForm.notes} onChange={e => setFutureIntentForm({ ...futureIntentForm, notes: e.target.value })}/>
+                          </div>
+                          <button type="submit" className="btn btn-secondary btn-sm" style={{ alignSelf:'flex-start' }} disabled={submittingFutureLead}>
+                            Register Future Plan
+                          </button>
+                        </form>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -1835,6 +2053,7 @@ export default function ClientPortalPage() {
                           <div className="form-group"><label className="form-label">Email Address</label><input className="form-input" defaultValue={user.email} disabled style={{ opacity:0.6 }}/></div>
                           <div className="form-group"><label className="form-label">Phone Number</label><input className="form-input" value={profileForm.phone} onChange={e => setProfileForm({...profileForm, phone:e.target.value})} placeholder="+44 xxx xxx xxxx"/></div>
                           <div className="form-group"><label className="form-label">Nationality</label><input className="form-input" value={profileForm.nationality} onChange={e => setProfileForm({...profileForm, nationality:e.target.value})} placeholder="e.g. British, Pakistani"/></div>
+                          <div className="form-group"><label className="form-label">Passport Expiry Date</label><input type="date" className="form-input" value={profileForm.passport_expiry} onChange={e => setProfileForm({...profileForm, passport_expiry:e.target.value})}/></div>
                         </div>
                         <div style={{ marginTop:20, display:'flex', alignItems:'center', gap:12 }}>
                           <button type="submit" className="btn btn-primary">Save Changes</button>
@@ -1851,8 +2070,231 @@ export default function ClientPortalPage() {
                   </div>
                 )}
 
+                {/* ===== REFERRALS & LOYALTY ===== */}
+                {activeTab === 'referrals' && (
+                  <div>
+                    <h1 className="heading-2" style={{ marginBottom:24 }}>Referral & Loyalty Program</h1>
+                    
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(240px, 1fr))', gap:20, marginBottom:24 }}>
+                      <div className="card" style={{ padding:20, display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center', textAlign:'center', background:'linear-gradient(135deg, var(--color-primary) 0%, #1e3a8a) 100%', color:'white' }}>
+                        <Gift size={40} color="var(--color-secondary)" style={{ marginBottom:12 }}/>
+                        <div style={{ fontSize:14, textTransform:'uppercase', opacity:0.8, fontWeight:700 }}>Loyalty Points</div>
+                        <div style={{ fontSize:42, fontWeight:800, margin:'10px 0' }}>{referralStats?.loyalty_points || 0}</div>
+                        <div style={{ fontSize:13, opacity:0.9 }}>1 point per £10 spent on confirmed packages</div>
+                      </div>
+
+                      <div className="card" style={{ padding:20, display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center', textAlign:'center', background:'linear-gradient(135deg, var(--color-secondary) 0%, #d97706 100%)', color:'black' }}>
+                        <Award size={40} style={{ marginBottom:12 }}/>
+                        <div style={{ fontSize:14, textTransform:'uppercase', opacity:0.8, fontWeight:700 }}>Cashback Credits</div>
+                        <div style={{ fontSize:42, fontWeight:800, margin:'10px 0' }}>£{(referralStats?.credits_balance || 0).toFixed(2)}</div>
+                        <div style={{ fontSize:13, opacity:0.9 }}>Earn 5% cashback credit from your referrals' bookings</div>
+                      </div>
+                    </div>
+
+                    <div className="card" style={{ padding:24, marginBottom:24 }}>
+                      <h3 style={{ fontSize:15, fontWeight:700, marginBottom:12 }}>Your Referral Code</h3>
+                      <p className="text-muted" style={{ fontSize:13, marginBottom:16 }}>
+                        Share your referral link with friends. When they register using your code and book a package, they get 50 points and you get 100 points + 5% cashback on their booking total!
+                      </p>
+                      <div style={{ display:'flex', gap:10, alignItems:'center' }}>
+                        <div style={{ flex:1, padding:'10px 14px', background:'var(--color-bg)', border:'1px solid var(--color-border)', borderRadius:8, fontFamily:'monospace', fontWeight:700, fontSize:15 }}>
+                          {referralStats?.referral_code || 'Generating...'}
+                        </div>
+                        <button type="button" className="btn btn-primary" onClick={() => {
+                          navigator.clipboard.writeText(referralStats?.referral_code || '');
+                          alert('Referral code copied to clipboard!');
+                        }}>Copy Code</button>
+                      </div>
+
+                      {!user.referred_by && (
+                        <form onSubmit={handleApplyReferral} style={{ marginTop:24, borderTop:'1px solid var(--color-border)', paddingTop:20 }}>
+                          <h4 style={{ fontSize:13, fontWeight:700, marginBottom:8 }}>Have a referral code?</h4>
+                          <div style={{ display:'flex', gap:10 }}>
+                            <input className="form-input" placeholder="Enter code (e.g. BT-XXXX-1234)" value={refCodeInput} onChange={e => setRefCodeInput(e.target.value)} required/>
+                            <button type="submit" className="btn btn-primary" disabled={applyingRef}>
+                              {applyingRef ? 'Applying...' : 'Apply Code'}
+                            </button>
+                          </div>
+                          {refSuccessMsg && <p style={{ color:'var(--color-success)', fontSize:12, marginTop:8 }}>{refSuccessMsg}</p>}
+                          {refErrorMsg && <p style={{ color:'var(--color-danger)', fontSize:12, marginTop:8 }}>{refErrorMsg}</p>}
+                        </form>
+                      )}
+                    </div>
+
+                    <div className="card" style={{ padding:24, marginBottom:24 }}>
+                      <h3 style={{ fontSize:15, fontWeight:700, marginBottom:12 }}>Your Referrals</h3>
+                      {referralStats?.referrals?.length > 0 ? (
+                        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                          {referralStats.referrals.map((refUser, idx) => (
+                            <div key={idx} style={{ display:'flex', justifyContent:'space-between', padding:'10px 12px', background:'var(--color-bg)', border:'1px solid var(--color-border)', borderRadius:8, fontSize:13 }}>
+                              <div>
+                                <strong>{refUser.name}</strong>
+                                <span style={{ color:'var(--color-text-muted)', marginLeft:8 }}>({refUser.email})</span>
+                              </div>
+                              <span className="text-muted">{new Date(refUser.created_at).toLocaleDateString()}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-muted" style={{ fontSize:13, textAlign:'center', padding:'20px 0' }}>No friends referred yet. Share your code to earn points!</p>
+                      )}
+                    </div>
+
+                    {/* Customer Survey Feedback Section */}
+                    <div className="card" style={{ padding:24 }}>
+                      <h3 style={{ fontSize:15, fontWeight:700, marginBottom:12 }}>Customer Satisfaction Survey</h3>
+                      <p className="text-muted" style={{ fontSize:13, marginBottom:16 }}>
+                        Have you recently completed a trip or application? Rate our service and help us improve.
+                      </p>
+                      {surveySuccess ? (
+                        <div style={{ background:'rgba(16,185,129,0.08)', border:'1px solid rgba(16,185,129,0.2)', padding:'12px 16px', borderRadius:8, color:'var(--color-success)', fontSize:13 }}>
+                          Thank you for sharing your feedback! Your review helps us deliver better travel experiences.
+                        </div>
+                      ) : (
+                        <form onSubmit={handleSurveySubmit} style={{ display:'flex', flexDirection:'column', gap:14 }}>
+                          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+                            <div className="form-group">
+                              <label className="form-label">Select File Reference</label>
+                              <select className="form-input" value={surveyForm.ref} onChange={e => setSurveyForm({ ...surveyForm, ref: e.target.value })} required>
+                                <option value="">-- Choose travel file --</option>
+                                {[...bookings, ...visaApps].map((item, idx) => (
+                                  <option key={idx} value={item.booking_ref || item.app_ref}>
+                                    {item.package_title || `Visa to ${item.country}`} ({item.booking_ref || item.app_ref})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label">Service Rating (1 to 5 Stars)</label>
+                              <select className="form-input" value={surveyForm.rating} onChange={e => setSurveyForm({ ...surveyForm, rating: parseInt(e.target.value) })} required>
+                                <option value="5">⭐⭐⭐⭐⭐ (Excellent)</option>
+                                <option value="4">⭐⭐⭐⭐ (Good)</option>
+                                <option value="3">⭐⭐⭐ (Average)</option>
+                                <option value="2">⭐⭐ (Fair)</option>
+                                <option value="1">⭐ (Poor)</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label">Your Feedback / Review Comments</label>
+                            <textarea className="form-input" rows="3" placeholder="Tell us about your experience..." value={surveyForm.feedback} onChange={e => setSurveyForm({ ...surveyForm, feedback: e.target.value })} required/>
+                          </div>
+                          <button type="submit" className="btn btn-primary" style={{ alignSelf:'flex-start' }} disabled={submittingSurvey}>
+                            {submittingSurvey ? 'Submitting...' : 'Submit Feedback'}
+                          </button>
+                        </form>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ===== CONSULTATIONS CALENDAR ===== */}
+                {activeTab === 'consultations' && (
+                  <div>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:24, flexWrap:'wrap', gap:12 }}>
+                      <h1 className="heading-2">Book a Consultation</h1>
+                      <button type="button" className="btn btn-primary" onClick={() => setBookingConsultation(true)}>Schedule Appointment</button>
+                    </div>
+
+                    <div className="card" style={{ padding:24, marginBottom:24 }}>
+                      <h3 style={{ fontSize:15, fontWeight:700, marginBottom:16 }}>Upcoming Consultations</h3>
+                      {consultations.length > 0 ? (
+                        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                          {consultations.map((c, idx) => (
+                            <div key={idx} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'14px 18px', background:'var(--color-bg)', border:'1px solid var(--color-border)', borderRadius:10 }}>
+                              <div>
+                                <h4 style={{ fontWeight:700, fontSize:14, color:'var(--color-text)' }}>{c.title}</h4>
+                                <div className="text-muted" style={{ fontSize:12, marginTop:4, display:'flex', gap:14 }}>
+                                  <span>📅 {new Date(c.scheduled_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                                  <span>⏱️ {c.duration} mins</span>
+                                </div>
+                                {c.notes && <p className="text-muted" style={{ fontSize:11, marginTop:6, fontStyle:'italic' }}>Notes: {c.notes}</p>}
+                              </div>
+                              <span style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', color: c.status === 'scheduled' ? 'var(--color-secondary)' : (c.status === 'completed' ? 'var(--color-success)' : 'var(--color-danger)') }}>
+                                {c.status}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-muted" style={{ fontSize:13, textAlign:'center', padding:'20px 0' }}>No consultations booked yet. Need help? Book a free slot with our advisors.</p>
+                      )}
+                    </div>
+
+                    {bookingConsultation && (
+                      <div className="card" style={{ padding:24 }}>
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+                          <h3 style={{ fontSize:15, fontWeight:700 }}>New Appointment Details</h3>
+                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setBookingConsultation(false)}>Close Form</button>
+                        </div>
+                        <form onSubmit={handleBookConsultation} style={{ display:'flex', flexDirection:'column', gap:14 }}>
+                          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+                            <div className="form-group">
+                              <label className="form-label">Consultation Reason</label>
+                              <select className="form-input" value={consForm.title} onChange={e => setConsForm({ ...consForm, title: e.target.value })} required>
+                                <option value="Visa Consultation">Visa Eligibility Review</option>
+                                <option value="Holiday Package Customization">Holiday Package Planning</option>
+                                <option value="Document Audit & Review">Document Preparation Review</option>
+                                <option value="General Travel Enquiry">General Travel Inquiry</option>
+                              </select>
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label">Date & Time Slot</label>
+                              <input type="datetime-local" className="form-input" value={consForm.scheduled_at} onChange={e => setConsForm({ ...consForm, scheduled_at: e.target.value })} required/>
+                            </div>
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label">Additional Consultation Notes (Optional)</label>
+                            <textarea className="form-input" rows="2" placeholder="List details or specific questions you have..." value={consForm.notes} onChange={e => setConsForm({ ...consForm, notes: e.target.value })}/>
+                          </div>
+                          <button type="submit" className="btn btn-primary" style={{ alignSelf:'flex-start' }} disabled={submittingConsultation}>
+                            {submittingConsultation ? 'Booking...' : 'Book Slot'}
+                          </button>
+                        </form>
+                      </div>
+                    )}
+                  </div>
+                )}
+
               </motion.div>
             </AnimatePresence>
+          )}
+
+          {/* ===== DIGITAL SIGNATURE MODAL OVERLAY ===== */}
+          {signingFile && (
+            <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+              <div className="card animate-fadeIn" style={{ maxWidth:500, width:'100%', padding:24, background:'var(--color-surface)', boxShadow:'var(--shadow-2xl)', borderRadius:12 }}>
+                <h3 style={{ fontSize:18, fontWeight:800, marginBottom:8 }}>✍️ E-Sign Travel Agreement</h3>
+                <p className="text-muted" style={{ fontSize:13, marginBottom:16 }}>
+                  By signing below, you agree to the travel terms, cancellation policy, and document compliance terms.
+                </p>
+                
+                <form onSubmit={handleSignatureSubmit}>
+                  <div style={{ display:'flex', gap:10, marginBottom:16 }}>
+                    <button type="button" className={`btn btn-sm ${signatureType==='typed' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setSignatureType('typed')}>Type Signature</button>
+                    <button type="button" className={`btn btn-sm ${signatureType==='drawn' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setSignatureType('drawn')}>Draw Signature</button>
+                  </div>
+
+                  {signatureType === 'typed' ? (
+                    <div className="form-group" style={{ marginBottom:20 }}>
+                      <label className="form-label">Type your full legal name</label>
+                      <input className="form-input" style={{ fontStyle:'italic', fontFamily:'Georgia, serif', fontSize:18, padding:'10px 14px' }} placeholder={user.name} value={typedSignature} onChange={e => setTypedSignature(e.target.value)} required/>
+                    </div>
+                  ) : (
+                    <div style={{ height:120, border:'2px dashed var(--color-border)', borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', background:'var(--color-bg)', marginBottom:20 }}>
+                      <span style={{ fontSize:12, color:'var(--color-text-muted)' }}>[ Signature Canvas Area - Draw with Mouse/Touch ]</span>
+                    </div>
+                  )}
+
+                  <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
+                    <button type="button" className="btn btn-outline btn-sm" onClick={() => { setSigningFile(null); setTypedSignature(''); }}>Cancel</button>
+                    <button type="submit" className="btn btn-primary btn-sm" disabled={submittingSignature}>
+                      {submittingSignature ? 'Signing...' : 'Sign Agreement'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
           )}
         </main>
       </div>

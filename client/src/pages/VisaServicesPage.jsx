@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useEvaluation } from '../context/EvaluationContext';
+import { useAuth } from '../context/AuthContext';
 import {
   Shield, CheckCircle2, Clock, FileText, ArrowRight, ChevronDown,
   Globe, MapPin, AlertCircle, Star, Phone, Users
@@ -52,6 +53,7 @@ const faqs = [
 ];
 
 export default function VisaServicesPage() {
+  const { user } = useAuth();
   const [openFaq, setOpenFaq] = useState(null);
   const [quizStep, setQuizStep] = useState(0);
   const [quizAnswers, setQuizAnswers] = useState({});
@@ -245,7 +247,9 @@ export default function VisaServicesPage() {
                       : 'Your case needs professional attention. We specialise in challenging applications.'}
                   </p>
                   <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-                    <Link to="/contact" className="btn btn-primary btn-lg">Book Free Consultation</Link>
+                    <Link to={user ? "/portal" : "/register"} className="btn btn-primary btn-lg">
+                      {user ? "Access Client Portal" : "Start Application & View Checklist"}
+                    </Link>
                     <button className="btn btn-outline" onClick={() => { setShowResult(false); setQuizStep(0); setQuizAnswers({}); }}>
                       Retake Quiz
                     </button>

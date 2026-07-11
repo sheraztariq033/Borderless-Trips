@@ -60,7 +60,7 @@ router.post('/login', authLimiter, async (req, res) => {
       user: {
         id: user.id, name: user.name, email: user.email, phone: user.phone,
         nationality: user.nationality, role: user.role, sub_role: user.sub_role || '',
-        profile_photo: user.profile_photo || ''
+        profile_photo: user.profile_photo || '', passport_expiry: user.passport_expiry || ''
       }
     });
   } catch (error) {
@@ -75,13 +75,13 @@ router.get('/me', authenticate, (req, res) => {
 
 // PUT /api/auth/profile
 router.put('/profile', authenticate, async (req, res) => {
-  const { name, phone, nationality, profile_photo } = req.body;
+  const { name, phone, nationality, profile_photo, passport_expiry } = req.body;
   try {
     await db.prepare(
-      'UPDATE users SET name = COALESCE(?, name), phone = COALESCE(?, phone), nationality = COALESCE(?, nationality), profile_photo = COALESCE(?, profile_photo) WHERE id = ?'
-    ).run(name, phone, nationality, profile_photo, req.user.id);
+      'UPDATE users SET name = COALESCE(?, name), phone = COALESCE(?, phone), nationality = COALESCE(?, nationality), profile_photo = COALESCE(?, profile_photo), passport_expiry = COALESCE(?, passport_expiry) WHERE id = ?'
+    ).run(name, phone, nationality, profile_photo, passport_expiry, req.user.id);
     const updatedUser = await db.prepare(`
-      SELECT u.id, u.name, u.email, u.phone, u.nationality, u.role, u.sub_role, u.profile_photo, u.created_at, u.assigned_to,
+      SELECT u.id, u.name, u.email, u.phone, u.nationality, u.role, u.sub_role, u.profile_photo, u.passport_expiry, u.created_at, u.assigned_to,
         a.name as assigned_name
       FROM users u
       LEFT JOIN users a ON u.assigned_to = a.id

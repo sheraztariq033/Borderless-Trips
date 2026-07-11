@@ -67,10 +67,13 @@ router.post('/', async (req, res) => {
     }
 
     const ref = generateRef();
+    const { calculateLeadScore } = require('./business-suite');
+    const leadScore = calculateLeadScore({ service_type, country, details }, phone, 'normal');
+
     await db.prepare(`
-      INSERT INTO service_requests (ref, user_id, name, email, phone, service_type, country, details_json, status, priority, admin_notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new', 'normal', '')
-    `).run(ref, userId, name, email.toLowerCase(), phone || '', service_type, country || '', JSON.stringify(details || {}));
+      INSERT INTO service_requests (ref, user_id, name, email, phone, service_type, country, details_json, status, priority, admin_notes, lead_score, lead_stage)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new', 'normal', '', ?, 'new')
+    `).run(ref, userId, name, email.toLowerCase(), phone || '', service_type, country || '', JSON.stringify(details || {}), leadScore);
 
     const request = await db.prepare('SELECT * FROM service_requests WHERE ref = ?').get(ref);
     

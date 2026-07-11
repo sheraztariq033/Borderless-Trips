@@ -29,14 +29,24 @@ export default function PackageDetailPage() {
         return res.json();
       })
       .then(data => {
+        let imgs = [];
+        if (Array.isArray(data.images)) {
+          imgs = data.images;
+        } else if (typeof data.images === 'string' && data.images.trim()) {
+          try {
+            const parsed = JSON.parse(data.images);
+            imgs = Array.isArray(parsed) ? parsed : [data.images];
+          } catch (e) {
+            imgs = data.images.split(',').map(s => s.trim()).filter(Boolean);
+          }
+        }
+
         const normalized = {
           ...data,
-          image: data.images?.[0] || data.image || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800&q=80'
+          images: imgs,
+          image: imgs[0] || data.image || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800&q=80'
         };
-        // Parse strings if needed
-        if (typeof normalized.images === 'string') {
-          try { normalized.images = JSON.parse(normalized.images); } catch (e) { normalized.images = []; }
-        }
+
         if (typeof normalized.includes === 'string') {
           try { normalized.includes = JSON.parse(normalized.includes); } catch (e) { normalized.includes = []; }
         }
@@ -105,7 +115,11 @@ export default function PackageDetailPage() {
         price: pkg.price 
       }) 
     })
-    .then(res => res.json())
+    .then(async res => {
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to submit booking request.');
+      return data;
+    })
     .then(data => {
       if (data.booking) {
         setBookingResult(data);
@@ -122,7 +136,9 @@ export default function PackageDetailPage() {
         }
       }
     })
-    .catch(() => {});
+    .catch((err) => {
+      alert(err.message || 'Something went wrong. Please try again.');
+    });
   };
 
   if (loading) {

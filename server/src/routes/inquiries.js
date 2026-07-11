@@ -10,8 +10,11 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'Name, email, and message are required.' });
   }
   try {
-    await db.prepare(`INSERT INTO inquiries (name, email, phone, subject, message, type, status, admin_notes) VALUES (?, ?, ?, ?, ?, ?, 'new', '')`)
-      .run(name, email.toLowerCase(), phone || '', subject || 'general', message, type || 'contact');
+    const { calculateLeadScore } = require('./business-suite');
+    const leadScore = calculateLeadScore({ subject, message, type }, phone, 'normal');
+
+    await db.prepare(`INSERT INTO inquiries (name, email, phone, subject, message, type, status, admin_notes, lead_score, lead_stage) VALUES (?, ?, ?, ?, ?, ?, 'new', '', ?, 'new')`)
+      .run(name, email.toLowerCase(), phone || '', subject || 'general', message, type || 'contact', leadScore);
     res.status(201).json({ message: 'Inquiry submitted successfully.' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to save inquiry.' });
@@ -98,6 +101,9 @@ router.post('/draft', async (req, res) => {
 - Email: ${emailLower || 'Not provided'}`;
 
   try {
+    const { calculateLeadScore } = require('./business-suite');
+    const leadScore = calculateLeadScore({ message: messageText }, phone, 'normal');
+
     let id = draftId;
     if (id) {
       // Check if exists
@@ -105,21 +111,21 @@ router.post('/draft', async (req, res) => {
       if (existing) {
         await db.prepare(`
           UPDATE inquiries 
-          SET name = ?, email = ?, phone = ?, message = ?, status = 'new'
+          SET name = ?, email = ?, phone = ?, message = ?, status = 'new', lead_score = ?
           WHERE id = ?
-        `).run(draftName, draftEmail, phone || '', messageText, id);
+        `).run(draftName, draftEmail, phone || '', messageText, leadScore, id);
       } else {
         const result = await db.prepare(`
-          INSERT INTO inquiries (name, email, phone, subject, message, type, status, admin_notes)
-          VALUES (?, ?, ?, 'Visa Evaluation (Draft)', ?, 'evaluation_draft', 'new', '')
-        `).run(draftName, draftEmail, phone || '', messageText);
+          INSERT INTO inquiries (name, email, phone, subject, message, type, status, admin_notes, lead_score, lead_stage)
+          VALUES (?, ?, ?, 'Visa Evaluation (Draft)', ?, 'evaluation_draft', 'new', '', ?, 'new')
+        `).run(draftName, draftEmail, phone || '', messageText, leadScore);
         id = result.lastInsertRowid;
       }
     } else {
       const result = await db.prepare(`
-        INSERT INTO inquiries (name, email, phone, subject, message, type, status, admin_notes)
-        VALUES (?, ?, ?, 'Visa Evaluation (Draft)', ?, 'evaluation_draft', 'new', '')
-      `).run(draftName, draftEmail, phone || '', messageText);
+          INSERT INTO inquiries (name, email, phone, subject, message, type, status, admin_notes, lead_score, lead_stage)
+          VALUES (?, ?, ?, 'Visa Evaluation (Draft)', ?, 'evaluation_draft', 'new', '', ?, 'new')
+      `).run(draftName, draftEmail, phone || '', messageText, leadScore);
       id = result.lastInsertRowid;
     }
 
@@ -190,25 +196,28 @@ router.post('/evaluate', async (req, res) => {
 - Previous visa rejections: ${rejection || 'No'}`;
 
     // Insert or update inquiry
+    const { calculateLeadScore } = require('./business-suite');
+    const leadScore = calculateLeadScore({ country, purpose, employed, funds, history, rejection }, phone, 'normal');
+
     if (draftId) {
       const existingDraft = await db.prepare('SELECT id FROM inquiries WHERE id = ?').get(draftId);
       if (existingDraft) {
         await db.prepare(`
           UPDATE inquiries
-          SET name = ?, email = ?, phone = ?, subject = 'Visa Evaluation', message = ?, type = 'evaluation', status = 'new', user_id = ?
+          SET name = ?, email = ?, phone = ?, subject = 'Visa Evaluation', message = ?, type = 'evaluation', status = 'new', user_id = ?, lead_score = ?
           WHERE id = ?
-        `).run(name, emailLower, phone || '', messageText, userId, draftId);
+        `).run(name, emailLower, phone || '', messageText, userId, leadScore, draftId);
       } else {
         await db.prepare(`
-          INSERT INTO inquiries (name, email, phone, subject, message, type, status, admin_notes, user_id)
-          VALUES (?, ?, ?, 'Visa Evaluation', ?, 'evaluation', 'new', '', ?)
-        `).run(name, emailLower, phone || '', messageText, userId);
+          INSERT INTO inquiries (name, email, phone, subject, message, type, status, admin_notes, user_id, lead_score, lead_stage)
+          VALUES (?, ?, ?, 'Visa Evaluation', ?, 'evaluation', 'new', '', ?, ?, 'new')
+        `).run(name, emailLower, phone || '', messageText, userId, leadScore);
       }
     } else {
       await db.prepare(`
-        INSERT INTO inquiries (name, email, phone, subject, message, type, status, admin_notes, user_id)
-        VALUES (?, ?, ?, 'Visa Evaluation', ?, 'evaluation', 'new', '', ?)
-      `).run(name, emailLower, phone || '', messageText, userId);
+        INSERT INTO inquiries (name, email, phone, subject, message, type, status, admin_notes, user_id, lead_score, lead_stage)
+        VALUES (?, ?, ?, 'Visa Evaluation', ?, 'evaluation', 'new', '', ?, ?, 'new')
+      `).run(name, emailLower, phone || '', messageText, userId, leadScore);
     }
 
     res.status(201).json({
@@ -223,6 +232,123 @@ router.post('/evaluate', async (req, res) => {
   } catch (error) {
     console.error('Evaluation submit error:', error);
     res.status(500).json({ error: 'Failed to process evaluation.' });
+  }
+});
+
+// POST /api/inquiries/:id/convert - Convert inquiry to booking or visa application (Admin Only)
+router.post('/:id/convert', authenticate, adminOnly, async (req, res) => {
+  const { id } = req.params;
+  const { target_type } = req.body; // 'visa' or 'booking'
+
+  if (!['visa', 'booking'].includes(target_type)) {
+    return res.status(400).json({ error: "Invalid target_type. Must be 'visa' or 'booking'." });
+  }
+
+  try {
+    const inquiry = await db.prepare('SELECT * FROM inquiries WHERE id = ?').get(id);
+    if (!inquiry) {
+      return res.status(404).json({ error: 'Inquiry not found.' });
+    }
+
+    if (inquiry.status === 'completed') {
+      return res.status(400).json({ error: 'Inquiry is already completed/converted.' });
+    }
+
+    // Check if the customer user exists or create a temp customer if needed
+    let userId = inquiry.user_id;
+    if (!userId) {
+      const user = await db.prepare('SELECT id FROM users WHERE email = ?').get(inquiry.email.toLowerCase());
+      if (user) {
+        userId = user.id;
+      } else {
+        // Create customer account
+        const bcrypt = require('bcryptjs');
+        const tempPassword = 'welcome' + Math.floor(1000 + Math.random() * 9000);
+        const hash = bcrypt.hashSync(tempPassword, 10);
+        const userInsert = await db.prepare(`
+          INSERT INTO users (name, email, password_hash, phone, role, status)
+          VALUES (?, ?, ?, ?, 'customer', 'active')
+        `).run(inquiry.name, inquiry.email.toLowerCase(), hash, inquiry.phone || '');
+        userId = userInsert.lastInsertRowid;
+      }
+    }
+
+    let resultMsg = '';
+    let targetRef = '';
+
+    if (target_type === 'visa') {
+      // Convert to Visa Application
+      const appRef = 'VISA-' + Math.floor(100000 + Math.random() * 900000);
+      targetRef = appRef;
+
+      await db.prepare(`
+        INSERT INTO visa_applications (
+          app_ref, user_id, customer_name, customer_email, customer_phone, country, nationality,
+          purpose, status, assessment_json, documents_json, notes, admin_notes, assigned_to,
+          travelers_json, payment_info_json, comments_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'submitted', '{}', '[]', ?, ?, ?, '[]', '{}', '[]')
+      `).run(
+        appRef,
+        userId,
+        inquiry.name,
+        inquiry.email.toLowerCase(),
+        inquiry.phone || '',
+        'Schengen',
+        '',
+        'tourism',
+        inquiry.message || inquiry.admin_notes || 'Converted from Inquiry #' + inquiry.id,
+        `Converted from Inquiry #${inquiry.id}. Initial notes: ${inquiry.admin_notes || ''}`,
+        inquiry.assigned_to
+      );
+
+      resultMsg = `Successfully converted to Visa Application (${appRef})`;
+
+    } else {
+      // Convert to Booking
+      const bookingRef = 'BKG-' + Math.floor(100000 + Math.random() * 900000);
+      targetRef = bookingRef;
+
+      await db.prepare(`
+        INSERT INTO bookings (
+          booking_ref, user_id, package_id, package_title, customer_name, customer_email, customer_phone,
+          travel_date, travelers, total_price, status, payment_status, notes, admin_notes, assigned_to
+        ) VALUES (?, ?, NULL, 'Holiday Package (From Inquiry)', ?, ?, ?, ?, 1, 0.0, 'pending', 'pending', ?, ?, ?)
+      `).run(
+        bookingRef,
+        userId,
+        inquiry.name,
+        inquiry.email.toLowerCase(),
+        inquiry.phone || '',
+        '',
+        inquiry.message || inquiry.admin_notes || 'Converted from Inquiry #' + inquiry.id,
+        `Converted from Inquiry #${inquiry.id}. Initial notes: ${inquiry.admin_notes || ''}`,
+        inquiry.assigned_to
+      );
+
+      resultMsg = `Successfully converted to Booking (${bookingRef})`;
+    }
+
+    // Update inquiry status to completed
+    const updatedNotes = `${inquiry.admin_notes || ''}\n[System] Converted to ${targetRef} on ${new Date().toLocaleDateString()}`.trim();
+    await db.prepare("UPDATE inquiries SET status = 'completed', admin_notes = ? WHERE id = ?")
+      .run(updatedNotes, id);
+
+    // Also update lead_stage to won since they are converted
+    await db.prepare("UPDATE inquiries SET lead_stage = 'won' WHERE id = ?").run(id);
+
+    // Log to Audit Trail
+    const { logAudit } = require('../utils/audit');
+    await logAudit(req.user.id, 'convert_inquiry', {
+      inquiry_id: id,
+      target_type,
+      target_ref: targetRef
+    });
+
+    res.json({ message: resultMsg, targetRef, status: 'completed' });
+
+  } catch (error) {
+    console.error('Inquiry conversion error:', error);
+    res.status(500).json({ error: 'Failed to convert inquiry. ' + error.message });
   }
 });
 

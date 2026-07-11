@@ -2,9 +2,9 @@ const nodemailer = require('nodemailer');
 const db = require('../models/database');
 
 // Helper to load settings from DB in real time
-function getSMTPSettings() {
+async function getSMTPSettings() {
   try {
-    const rows = db.prepare("SELECT key, value FROM settings WHERE key LIKE 'smtp_%'").all();
+    const rows = await db.prepare("SELECT key, value FROM settings WHERE key LIKE 'smtp_%'").all();
     const settings = {};
     rows.forEach(r => { settings[r.key] = r.value; });
     return settings;
@@ -15,8 +15,8 @@ function getSMTPSettings() {
 }
 
 // Build nodemailer transporter dynamically using DB settings
-function getTransporter() {
-  const settings = getSMTPSettings();
+async function getTransporter() {
+  const settings = await getSMTPSettings();
   const host = settings.smtp_host || process.env.SMTP_HOST;
   const port = parseInt(settings.smtp_port || process.env.SMTP_PORT || '587');
   const user = settings.smtp_user || process.env.SMTP_USER;
@@ -96,10 +96,10 @@ function getEmailTemplate(title, preheader, contentHtml) {
 
 // Core send mail wrapper
 async function sendMail({ to, subject, html, text }) {
-  const settings = getSMTPSettings();
+  const settings = await getSMTPSettings();
   const from = settings.smtp_from || process.env.SMTP_FROM || 'info@borderlesstrips.com';
 
-  const transporter = getTransporter();
+  const transporter = await getTransporter();
   if (!transporter) {
     console.log('\n--- ✉️ [MOCK EMAIL SENT] ---');
     console.log(`To: ${to}`);
@@ -352,5 +352,6 @@ module.exports = {
   sendWelcomeEmail,
   sendRequestConfirmation,
   sendStatusUpdateEmail,
-  sendAdminAlert
+  sendAdminAlert,
+  getEmailTemplate
 };

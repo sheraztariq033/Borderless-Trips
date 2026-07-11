@@ -18,11 +18,14 @@ const blogRoutes = require('./src/routes/blog');
 const analyticsRoutes = require('./src/routes/analytics');
 const aiRoutes = require('./src/routes/ai');
 const uploadRoutes = require('./src/routes/upload');
+const mediaRoutes = require('./src/routes/media');
 const messageRoutes = require('./src/routes/messages');
 const notificationRoutes = require('./src/routes/notifications');
 const serviceRequestRoutes = require('./src/routes/service-requests');
 const countryRoutes = require('./src/routes/countries');
 const documentTemplateRoutes = require('./src/routes/document-templates');
+const { router: businessSuiteRoutes } = require('./src/routes/business-suite');
+const publicRoutes = require('./src/routes/public');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -45,9 +48,9 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Serve static uploaded files (Cloudflare R2 streaming proxy with local disk fallback)
 const isR2Configured = !!(
-  process.env.R2_ACCOUNT_ID &&
-  process.env.R2_ACCESS_KEY_ID &&
-  process.env.R2_SECRET_ACCESS_KEY
+  process.env.R2_ACCOUNT_ID && !process.env.R2_ACCOUNT_ID.startsWith('YOUR_') &&
+  process.env.R2_ACCESS_KEY_ID && !process.env.R2_ACCESS_KEY_ID.startsWith('YOUR_') &&
+  process.env.R2_SECRET_ACCESS_KEY && !process.env.R2_SECRET_ACCESS_KEY.startsWith('YOUR_')
 );
 
 if (isR2Configured) {
@@ -55,7 +58,8 @@ if (isR2Configured) {
   app.get('/uploads/:filename', (req, res) => {
     const { filename } = req.params;
     const stream = getObjectStream(filename);
-    stream.on('error', () => {
+    stream.on('error', (err) => {
+      console.warn(`⚠️ S3 stream error for ${filename}:`, err.message);
       // Fallback to local files if stream error occurs (e.g. file is not in R2 but exists locally)
       const localPath = path.join(__dirname, 'data', 'uploads', filename);
       res.sendFile(localPath, (localErr) => {
@@ -87,11 +91,14 @@ app.use('/api/blog', blogRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/media', mediaRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/service-requests', serviceRequestRoutes);
 app.use('/api/countries', countryRoutes);
 app.use('/api/document-templates', documentTemplateRoutes);
+app.use('/api/business-suite', businessSuiteRoutes);
+app.use('/api/public', publicRoutes);
 
 // Optional: Serve frontend static files in production
 if (process.env.NODE_ENV === 'production') {
@@ -113,7 +120,16 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+const runMigrations = require('./migrate');
+const { startScheduler } = require('./src/utils/cron');
+
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`🚀 Server launched successfully on http://localhost:${PORT}`);
   console.log(`🌐 Network access: http://192.168.100.75:${PORT}`);
+  try {
+    await runMigrations();
+    startScheduler();
+  } catch (err) {
+    console.error('💥 Migrations/Scheduler failed on startup:', err.message);
+  }
 });

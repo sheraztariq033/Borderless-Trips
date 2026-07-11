@@ -11,10 +11,14 @@ if (!connectionString) {
   process.exit(1);
 }
 
+// Clean the connection string to remove the sslmode query parameter.
+// This prevents node-postgres from overriding our custom ssl config ({ rejectUnauthorized: false }) with ssl: true.
+const cleanConnectionString = connectionString.replace(/[?&]sslmode=[^&]+/g, '');
+
 // Initialize PostgreSQL pool
 const pool = new Pool({
-  connectionString,
-  ssl: connectionString.includes('supabase.co') 
+  connectionString: cleanConnectionString,
+  ssl: (connectionString.includes('supabase.co') || connectionString.includes('supabase.com'))
     ? { rejectUnauthorized: false } // Required for Supabase ssl connections
     : false
 });
@@ -25,6 +29,26 @@ pool.connect(async (err, client, release) => {
     console.error('💥 PostgreSQL connection failed:', err.message);
   } else {
     console.log('🚀 Connected to Supabase PostgreSQL database successfully!');
+    
+    // Auto-migrate schema updates (e.g. adding missing 'ref' column to notifications)
+    try {
+      await client.query("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS ref TEXT DEFAULT ''");
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS media_files (
+          id SERIAL PRIMARY KEY,
+          filename TEXT UNIQUE NOT NULL,
+          original_name TEXT NOT NULL,
+          mimetype TEXT NOT NULL,
+          size INTEGER NOT NULL,
+          url TEXT NOT NULL,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('🏁 Notifications and Media schema validation completed.');
+    } catch (migrateErr) {
+      console.warn('⚠️ Schema migration warning:', migrateErr.message);
+    }
+
     release();
     try {
       const { seedDatabase } = require('./seeder');
@@ -89,8 +113,15 @@ const db = {
 
     // 3. Handle auto-generating and returning row IDs on INSERT
     const isInsert = pgSql.trim().toUpperCase().startsWith('INSERT');
+    // Tables that don't have an 'id' column (use a different PK)
+    const noIdTables = ['settings'];
+    const insertTableMatch = pgSql.match(/INSERT\s+INTO\s+(\w+)/i);
+    const insertTable = insertTableMatch ? insertTableMatch[1].toLowerCase() : '';
+    const hasIdColumn = !noIdTables.includes(insertTable);
     if (isInsert && !pgSql.toUpperCase().includes('RETURNING')) {
-      pgSql = pgSql.trim().replace(/;$/, '') + ' RETURNING id';
+      if (hasIdColumn) {
+        pgSql = pgSql.trim().replace(/;$/, '') + ' RETURNING id';
+      }
     }
 
     // Return the query execution wrappers
@@ -98,7 +129,7 @@ const db = {
       // Return single row
       get: async (...params) => {
         try {
-          const flatParams = params.flat();
+          const flatParams = params.flat().map(p => p === undefined ? null : p);
           const result = await pool.query(pgSql, flatParams);
           return result.rows[0];
         } catch (err) {
@@ -110,7 +141,7 @@ const db = {
       // Return all rows
       all: async (...params) => {
         try {
-          const flatParams = params.flat();
+          const flatParams = params.flat().map(p => p === undefined ? null : p);
           const result = await pool.query(pgSql, flatParams);
           return result.rows;
         } catch (err) {
@@ -122,7 +153,7 @@ const db = {
       // Execute mutating command (INSERT/UPDATE/DELETE)
       run: async (...params) => {
         try {
-          const flatParams = params.flat();
+          const flatParams = params.flat().map(p => p === undefined ? null : p);
           const result = await pool.query(pgSql, flatParams);
           
           let lastInsertRowid = null;

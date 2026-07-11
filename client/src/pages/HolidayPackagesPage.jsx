@@ -32,8 +32,13 @@ export default function HolidayPackagesPage() {
   const [search, setSearch] = useState('');
   const [activeType, setActiveType] = useState('all');
   const [sortBy, setSortBy] = useState('Popular');
-  const [priceRange, setPriceRange] = useState([0, 2000]);
+  const [priceRange, setPriceRange] = useState([0, 100000]);
   const [showFilters, setShowFilters] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, activeType, priceRange]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -46,12 +51,25 @@ export default function HolidayPackagesPage() {
     fetch('/api/packages')
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
-          // Normalize image/images key
-          const normalized = data.map(p => ({
-            ...p,
-            image: p.images?.[0] || p.image || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=600&q=80'
-          }));
+        if (Array.isArray(data)) {
+          const normalized = data.map(p => {
+            let imgs = [];
+            if (Array.isArray(p.images)) {
+              imgs = p.images;
+            } else if (typeof p.images === 'string' && p.images.trim()) {
+              try {
+                const parsed = JSON.parse(p.images);
+                imgs = Array.isArray(parsed) ? parsed : [p.images];
+              } catch (e) {
+                imgs = p.images.split(',').map(s => s.trim()).filter(Boolean);
+              }
+            }
+            return {
+              ...p,
+              images: imgs,
+              image: imgs[0] || p.image || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=600&q=80'
+            };
+          });
           setPackages(normalized);
         } else {
           setPackages(allPackages);
@@ -157,42 +175,83 @@ export default function HolidayPackagesPage() {
 
           {/* Package Grid */}
           <div className="grid grid-3" style={{ gap: 'var(--space-6)' }}>
-            {filtered.map((pkg, i) => (
-              <Reveal key={pkg.id} delay={i * 0.05}>
-                <Link to={`/holiday-packages/${pkg.id}`} className="package-card" id={`package-${pkg.id}`}>
-                  <div className="package-image-wrap">
-                    <img src={pkg.image} alt={pkg.title} className="package-image" loading="lazy" />
-                    {pkg.featured && <span className="package-featured">Featured</span>}
-                    <div className="package-save">{Math.round((1 - pkg.price / pkg.originalPrice) * 100)}% OFF</div>
-                  </div>
-                  <div className="package-body">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8 }}>
-                      <MapPin size={14} color="var(--color-secondary)" />
-                      <span className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>{pkg.destination}</span>
+            {(() => {
+              const itemsPerPage = 6;
+              const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+              return paginated.map((pkg, i) => (
+                <Reveal key={pkg.id} delay={i * 0.05}>
+                  <Link to={`/holiday-packages/${pkg.id}`} className="package-card" id={`package-${pkg.id}`}>
+                    <div className="package-image-wrap">
+                      <img src={pkg.image} alt={pkg.title} className="package-image" loading="lazy" />
+                      {pkg.featured && <span className="package-featured">Featured</span>}
+                      <div className="package-save">{Math.round((1 - pkg.price / pkg.originalPrice) * 100)}% OFF</div>
                     </div>
-                    <h3 style={{ fontWeight: 700, fontSize: 'var(--text-base)', marginBottom: 8 }}>{pkg.title}</h3>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-                      <span className="tag"><Clock size={12} /> {pkg.duration}</span>
-                      <span className="tag"><Star size={12} fill="#F59E0B" color="#F59E0B" /> {pkg.rating}</span>
-                    </div>
-                    <div className="package-includes">
-                      {pkg.includes?.map((inc, j) => (
-                        <span key={j} className="package-include-tag">{inc}</span>
-                      ))}
-                    </div>
-                    <div className="package-footer">
-                      <div>
-                        <span className="package-original-price">£{pkg.originalPrice}</span>
-                        <span className="package-price">£{pkg.price}</span>
-                        <span className="text-muted" style={{ fontSize: 'var(--text-xs)' }}> /person</span>
+                    <div className="package-body">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8 }}>
+                        <MapPin size={14} color="var(--color-secondary)" />
+                        <span className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>{pkg.destination}</span>
                       </div>
-                      <span className="btn btn-primary btn-sm">View <ArrowRight size={14} /></span>
+                      <h3 style={{ fontWeight: 700, fontSize: 'var(--text-base)', marginBottom: 8 }}>{pkg.title}</h3>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                        <span className="tag"><Clock size={12} /> {pkg.duration}</span>
+                        <span className="tag"><Star size={12} fill="#F59E0B" color="#F59E0B" /> {pkg.rating}</span>
+                      </div>
+                      <div className="package-includes">
+                        {pkg.includes?.map((inc, j) => (
+                          <span key={j} className="package-include-tag">{inc}</span>
+                        ))}
+                      </div>
+                      <div className="package-footer">
+                        <div>
+                          <span className="package-original-price">£{pkg.originalPrice}</span>
+                          <span className="package-price">£{pkg.price}</span>
+                          <span className="text-muted" style={{ fontSize: 'var(--text-xs)' }}> /person</span>
+                        </div>
+                        <span className="btn btn-primary btn-sm">View <ArrowRight size={14} /></span>
+                      </div>
                     </div>
-                  </div>
-                </Link>
-              </Reveal>
-            ))}
+                  </Link>
+                </Reveal>
+              ));
+            })()}
           </div>
+
+          {/* Pagination Controls */}
+          {(() => {
+            const itemsPerPage = 6;
+            const totalPages = Math.ceil(filtered.length / itemsPerPage);
+            if (totalPages <= 1) return null;
+            return (
+              <div style={{ display:'flex', justifyContent:'center', alignItems:'center', gap:10, marginTop:40 }}>
+                <button 
+                  className="btn btn-outline btn-sm" 
+                  onClick={() => { setCurrentPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 300, behavior: 'smooth' }); }}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </button>
+                {Array.from({ length: totalPages }).map((_, idx) => {
+                  const pNum = idx + 1;
+                  return (
+                    <button 
+                      key={pNum} 
+                      className={`btn btn-sm ${currentPage === pNum ? 'btn-primary' : 'btn-outline'}`}
+                      onClick={() => { setCurrentPage(pNum); window.scrollTo({ top: 300, behavior: 'smooth' }); }}
+                    >
+                      {pNum}
+                    </button>
+                  );
+                })}
+                <button 
+                  className="btn btn-outline btn-sm" 
+                  onClick={() => { setCurrentPage(p => Math.min(totalPages, p + 1)); window.scrollTo({ top: 300, behavior: 'smooth' }); }}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </button>
+              </div>
+            );
+          })()}
 
           {filtered.length === 0 && (
             <div className="text-center" style={{ padding: 'var(--space-16) 0' }}>

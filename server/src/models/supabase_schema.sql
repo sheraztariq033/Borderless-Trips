@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS users (
     assigned_to INTEGER,
     phone TEXT DEFAULT '',
     nationality TEXT DEFAULT '',
+    status TEXT DEFAULT 'active',
+    profile_photo TEXT DEFAULT '',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -152,12 +154,11 @@ CREATE TABLE IF NOT EXISTS flight_requests (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- 11. Newsletter Table
-CREATE TABLE IF NOT EXISTS newsletter (
+-- 11. Newsletter Subscribers Table
+CREATE TABLE IF NOT EXISTS newsletter_subscribers (
     id SERIAL PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
-    active INTEGER DEFAULT 1,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    subscribed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 12. Notifications Table
@@ -169,6 +170,95 @@ CREATE TABLE IF NOT EXISTS notifications (
     is_read INTEGER DEFAULT 0,
     type TEXT DEFAULT 'system',
     ref TEXT DEFAULT '',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 13. Packages Table
+CREATE TABLE IF NOT EXISTS packages (
+    id SERIAL PRIMARY KEY,
+    title TEXT NOT NULL,
+    destination TEXT NOT NULL,
+    description TEXT,
+    duration TEXT,
+    price NUMERIC(10, 2) NOT NULL,
+    original_price NUMERIC(10, 2),
+    type TEXT DEFAULT 'adventure',
+    images TEXT DEFAULT '[]',
+    itinerary TEXT DEFAULT '[]',
+    includes TEXT DEFAULT '[]',
+    excludes TEXT DEFAULT '[]',
+    rating NUMERIC(3, 2) DEFAULT 0,
+    reviews INTEGER DEFAULT 0,
+    featured INTEGER DEFAULT 0,
+    active INTEGER DEFAULT 1,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 14. Blog Posts Table
+CREATE TABLE IF NOT EXISTS blog_posts (
+    id SERIAL PRIMARY KEY,
+    title TEXT NOT NULL,
+    slug TEXT UNIQUE NOT NULL,
+    content TEXT,
+    excerpt TEXT,
+    cover_image TEXT,
+    author TEXT DEFAULT 'Borderless Trips',
+    category TEXT DEFAULT 'Travel Guide',
+    published INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 15. Testimonials Table
+CREATE TABLE IF NOT EXISTS testimonials (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    location TEXT,
+    text TEXT NOT NULL,
+    rating INTEGER DEFAULT 5,
+    photo TEXT,
+    featured INTEGER DEFAULT 0,
+    active INTEGER DEFAULT 1,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 16. Messages Table
+CREATE TABLE IF NOT EXISTS messages (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    sender TEXT NOT NULL CHECK(sender IN ('customer', 'admin')),
+    message TEXT NOT NULL,
+    is_read INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 17. Service Requests Table
+CREATE TABLE IF NOT EXISTS service_requests (
+    id SERIAL PRIMARY KEY,
+    ref TEXT UNIQUE NOT NULL,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    phone TEXT DEFAULT '',
+    service_type TEXT NOT NULL CHECK(service_type IN ('visa', 'holiday_package', 'flight', 'hotel', 'consultation', 'other')),
+    country TEXT DEFAULT '',
+    details_json TEXT DEFAULT '{}',
+    status TEXT DEFAULT 'new' CHECK(status IN ('new', 'accepted', 'in_progress', 'completed', 'rejected')),
+    priority TEXT DEFAULT 'normal' CHECK(priority IN ('low', 'normal', 'high', 'urgent')),
+    assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    admin_notes TEXT DEFAULT '',
+    comments_json TEXT DEFAULT '[]',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 18. Countries Table
+CREATE TABLE IF NOT EXISTS countries (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    code TEXT DEFAULT '',
+    region TEXT DEFAULT 'europe',
+    visa_required INTEGER DEFAULT 1,
+    active INTEGER DEFAULT 1,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../models/database');
 const { authenticate, adminOnly } = require('../middleware/auth');
+const { logAudit } = require('../utils/audit');
 
 function generateAppRef() {
   const num = Math.floor(100000 + Math.random() * 900000);
@@ -352,6 +353,12 @@ router.put('/applications/:id', authenticate, async (req, res) => {
          await db.prepare('UPDATE visa_applications SET comments_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(JSON.stringify(comments), id);
       }
     }
+
+    await logAudit(req.user.id, req.user.role === 'admin' ? 'admin_update_visa' : 'client_update_visa', {
+      visa_id: id,
+      app_ref: app.app_ref,
+      changes: req.user.role === 'admin' ? { status, notes, admin_notes, assigned_to } : { comments_changed: !!comments, documents_changed: !!documents, travelers_changed: !!travelers }
+    });
 
     res.json({ message: 'Visa application updated successfully.' });
   } catch (error) {

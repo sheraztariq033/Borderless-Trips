@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../models/database');
 const { authenticate, adminOnly } = require('../middleware/auth');
+const { logAudit } = require('../utils/audit');
 
 // GET /api/document-templates/folders - List all folders
 router.get('/folders', authenticate, async (req, res) => {
@@ -34,6 +35,7 @@ router.post('/folders', authenticate, adminOnly, async (req, res) => {
 
     const result = await db.prepare('INSERT INTO document_folders (name) VALUES (?)').run(name.trim());
     const folder = await db.prepare('SELECT * FROM document_folders WHERE id = ?').get(result.lastInsertRowid);
+    await logAudit(req.user.id, 'create_folder', { folder_name: name.trim(), folder_id: result.lastInsertRowid });
     res.status(201).json({ message: 'Folder created successfully.', folder });
   } catch (error) {
     res.status(500).json({ error: 'Failed to create document folder.' });
@@ -61,6 +63,7 @@ router.put('/folders/:id', authenticate, adminOnly, async (req, res) => {
     }
 
     await db.prepare('UPDATE document_folders SET name = ? WHERE id = ?').run(name.trim(), id);
+    await logAudit(req.user.id, 'update_folder', { folder_id: id, new_name: name.trim() });
     res.json({ message: 'Folder updated successfully.' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update folder.' });
@@ -91,6 +94,7 @@ router.delete('/folders/:id', authenticate, adminOnly, async (req, res) => {
       client.release();
     }
 
+    await logAudit(req.user.id, 'delete_folder', { folder_id: id, folder_name: folder.name });
     res.json({ message: 'Folder deleted successfully.' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete folder.' });
@@ -150,6 +154,7 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
     `).run(service_type, country || '', name, description || '', required ? 1 : 0, folder_id || null);
 
     const template = await db.prepare('SELECT * FROM document_templates WHERE id = ?').get(result.lastInsertRowid);
+    await logAudit(req.user.id, 'create_template', { template_id: result.lastInsertRowid, template_name: name, service_type });
     res.status(201).json({ message: 'Template created successfully.', template });
   } catch (error) {
     res.status(500).json({ error: 'Failed to create document template.' });
@@ -187,6 +192,7 @@ router.put('/:id', authenticate, adminOnly, async (req, res) => {
     );
 
     const updated = await db.prepare('SELECT * FROM document_templates WHERE id = ?').get(id);
+    await logAudit(req.user.id, 'update_template', { template_id: id, template_name: name || template.name });
     res.json({ message: 'Template updated successfully.', template: updated });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update document template.' });
@@ -203,6 +209,7 @@ router.delete('/:id', authenticate, adminOnly, async (req, res) => {
     }
 
     await db.prepare('DELETE FROM document_templates WHERE id = ?').run(id);
+    await logAudit(req.user.id, 'delete_template', { template_id: id, template_name: template.name });
     res.json({ message: 'Document template deleted successfully.' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete document template.' });

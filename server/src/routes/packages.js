@@ -4,11 +4,15 @@ const db = require('../models/database');
 const { authenticate, adminOnly } = require('../middleware/auth');
 
 const parseArray = (str) => {
+  if (!str) return [];
   try {
-    let parsed = JSON.parse(str || '[]');
+    let parsed = JSON.parse(str);
     if (typeof parsed === 'string') parsed = JSON.parse(parsed);
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed : [str];
   } catch (e) {
+    if (typeof str === 'string' && str.trim()) {
+      return str.split(',').map(s => s.trim()).filter(Boolean);
+    }
     return [];
   }
 };

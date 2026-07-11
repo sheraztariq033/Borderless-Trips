@@ -28,11 +28,13 @@ const ServiceRequestPage = lazy(() => import('./pages/ServiceRequestPage'));
 const RefundPage = lazy(() => import('./pages/RefundPage'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
+const TrackPage = lazy(() => import('./pages/TrackPage'));
 
 // Auth pages
 const AuthPagesImport = () => import('./pages/AuthPages');
 const LoginPage = lazy(() => AuthPagesImport().then(m => ({ default: m.LoginPage })));
 const RegisterPage = lazy(() => AuthPagesImport().then(m => ({ default: m.RegisterPage })));
+const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'));
 
 // Loading fallback
 function PageLoader() {
@@ -67,8 +69,8 @@ function ScrollToTop() {
 // Layout wrapper — no navbar/footer on auth and admin/portal pages
 function AppLayout() {
   const location = useLocation();
-  const hideLayout = ['/login', '/register'].includes(location.pathname);
-  const isPortalOrAdmin = location.pathname.startsWith('/portal') || location.pathname.startsWith('/admin');
+  const hideLayout = ['/login', '/register', '/auth/callback'].includes(location.pathname);
+  const isPortalOrAdmin = location.pathname.startsWith('/portal') || location.pathname.startsWith('/admin') || location.pathname.startsWith('/auth/callback');
 
   return (
     <>
@@ -90,6 +92,8 @@ function AppLayout() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/portal" element={<ClientPortalPage />} />
+            <Route path="/track" element={<TrackPage />} />
+            <Route path="/auth/callback" element={<AuthCallbackPage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/request-service" element={<ServiceRequestPage />} />
             <Route path="/refund-policy" element={<RefundPage />} />
