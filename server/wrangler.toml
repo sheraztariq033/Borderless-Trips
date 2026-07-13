@@ -1,0 +1,11 @@
+name = "borderless-backend"
+main = "worker.js"
+compatibility_date = "2025-04-01"
+compatibility_flags = [ "nodejs_compat", "nodejs_compat_populate_process_env" ]
+
+[vars]
+NODE_ENV = "production"
+PORT = "3001"
+
+[triggers]
+crons = ["0 0 * * *"] # Run daily checks at midnight

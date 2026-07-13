@@ -144,4 +144,16 @@ function startScheduler() {
   }, 24 * 60 * 60 * 1000);
 }
 
-module.exports = { startScheduler };
+async function runDailyChecks() {
+  console.log('⏰ Running daily background checks...');
+  try {
+    await checkPassportExpiries();
+    await checkTravelDateReminders();
+    await checkFutureLeadsFollowUps();
+    console.log('✅ Daily background checks complete successfully.');
+  } catch (err) {
+    console.error('💥 Daily background checks failed:', err.message);
+  }
+}
+
+module.exports = { startScheduler, runDailyChecks };

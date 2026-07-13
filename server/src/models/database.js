@@ -4,75 +4,86 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-const connectionString = process.env.DATABASE_URL;
+let pool = null;
 
-if (!connectionString) {
-  console.error('💥 CRITICAL ERROR: DATABASE_URL is missing in environment variables (.env)');
-  process.exit(1);
-}
-
-// Clean the connection string to remove the sslmode query parameter.
-// This prevents node-postgres from overriding our custom ssl config ({ rejectUnauthorized: false }) with ssl: true.
-const cleanConnectionString = connectionString.replace(/[?&]sslmode=[^&]+/g, '');
-
-// Initialize PostgreSQL pool
-const pool = new Pool({
-  connectionString: cleanConnectionString,
-  ssl: (connectionString.includes('supabase.co') || connectionString.includes('supabase.com'))
-    ? { rejectUnauthorized: false } // Required for Supabase ssl connections
-    : false
-});
-
-// Test connection on launch
-pool.connect(async (err, client, release) => {
-  if (err) {
-    console.error('💥 PostgreSQL connection failed:', err.message);
-  } else {
-    console.log('🚀 Connected to Supabase PostgreSQL database successfully!');
-    
-    // Auto-migrate schema updates (e.g. adding missing 'ref' column to notifications)
-    try {
-      await client.query("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS ref TEXT DEFAULT ''");
-      await client.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_url TEXT DEFAULT NULL");
-      await client.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_name TEXT DEFAULT NULL");
-      await client.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_type TEXT DEFAULT NULL");
-      await client.query("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_requested INTEGER DEFAULT 0");
-      await client.query("ALTER TABLE visa_applications ADD COLUMN IF NOT EXISTS payment_requested INTEGER DEFAULT 0");
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS media_files (
-          id SERIAL PRIMARY KEY,
-          filename TEXT UNIQUE NOT NULL,
-          original_name TEXT NOT NULL,
-          mimetype TEXT NOT NULL,
-          size INTEGER NOT NULL,
-          url TEXT NOT NULL,
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
-      console.log('🏁 Notifications and Media schema validation completed.');
-    } catch (migrateErr) {
-      console.warn('⚠️ Schema migration warning:', migrateErr.message);
+const getPool = () => {
+  if (!pool) {
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      throw new Error("💥 DATABASE_URL is missing in environment variables. Database connection cannot be established.");
     }
-
-    release();
-    try {
-      const { seedDatabase } = require('./seeder');
-      await seedDatabase();
-    } catch (e) {
-      console.error('💥 Failed to run seeding on startup:', e.message);
-    }
+    const cleanConnectionString = connectionString.replace(/[?&]sslmode=[^&]+/g, '');
+    pool = new Pool({
+      connectionString: cleanConnectionString,
+      ssl: (connectionString.includes('supabase.co') || connectionString.includes('supabase.com'))
+        ? { rejectUnauthorized: false } // Required for Supabase ssl connections
+        : false
+    });
   }
-});
+  return pool;
+};
+
+// Initial connection test for environments where DATABASE_URL is populated on start
+if (process.env.DATABASE_URL) {
+  try {
+    const p = getPool();
+    p.connect(async (err, client, release) => {
+      if (err) {
+        console.error('💥 PostgreSQL connection failed:', err.message);
+      } else {
+        console.log('🚀 Connected to Supabase PostgreSQL database successfully!');
+        
+        // Auto-migrate schema updates (e.g. adding missing 'ref' column to notifications)
+        try {
+          await client.query("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS ref TEXT DEFAULT ''");
+          await client.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_url TEXT DEFAULT NULL");
+          await client.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_name TEXT DEFAULT NULL");
+          await client.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_type TEXT DEFAULT NULL");
+          await client.query("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_requested INTEGER DEFAULT 0");
+          await client.query("ALTER TABLE visa_applications ADD COLUMN IF NOT EXISTS payment_requested INTEGER DEFAULT 0");
+          await client.query(`
+            CREATE TABLE IF NOT EXISTS media_files (
+              id SERIAL PRIMARY KEY,
+              filename TEXT UNIQUE NOT NULL,
+              original_name TEXT NOT NULL,
+              mimetype TEXT NOT NULL,
+              size INTEGER NOT NULL,
+              url TEXT NOT NULL,
+              created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+          `);
+          console.log('🏁 Notifications and Media schema validation completed.');
+        } catch (migrateErr) {
+          console.warn('⚠️ Schema migration warning:', migrateErr.message);
+        }
+
+        release();
+        try {
+          const { seedDatabase } = require('./seeder');
+          await seedDatabase();
+        } catch (e) {
+          console.error('💥 Failed to run seeding on startup:', e.message);
+        }
+      }
+    });
+  } catch (initErr) {
+    console.warn('⚠️ Database pool initialization deferred:', initErr.message);
+  }
+} else {
+  console.warn('⚠️ WARNING: DATABASE_URL is missing in environment variables. Database pool will initialize dynamically.');
+}
 
 // Compatibility wrapper matching the SQLite api
 const db = {
   // Direct client access if needed
-  pool,
+  get pool() {
+    return getPool();
+  },
 
   // Exec raw SQL statements (async)
   exec: async (sql) => {
     try {
-      return await pool.query(sql);
+      return await getPool().query(sql);
     } catch (err) {
       console.error('💥 Database exec error:', err.message, '\nQuery:', sql);
       throw err;
@@ -135,7 +146,7 @@ const db = {
       get: async (...params) => {
         try {
           const flatParams = params.flat().map(p => p === undefined ? null : p);
-          const result = await pool.query(pgSql, flatParams);
+          const result = await getPool().query(pgSql, flatParams);
           return result.rows[0];
         } catch (err) {
           console.error('💥 PG query get error:', err.message, '\nQuery:', pgSql, '\nParams:', params);
@@ -147,7 +158,7 @@ const db = {
       all: async (...params) => {
         try {
           const flatParams = params.flat().map(p => p === undefined ? null : p);
-          const result = await pool.query(pgSql, flatParams);
+          const result = await getPool().query(pgSql, flatParams);
           return result.rows;
         } catch (err) {
           console.error('💥 PG query all error:', err.message, '\nQuery:', pgSql, '\nParams:', params);
@@ -159,7 +170,7 @@ const db = {
       run: async (...params) => {
         try {
           const flatParams = params.flat().map(p => p === undefined ? null : p);
-          const result = await pool.query(pgSql, flatParams);
+          const result = await getPool().query(pgSql, flatParams);
           
           let lastInsertRowid = null;
           if (isInsert && result.rows[0]) {
