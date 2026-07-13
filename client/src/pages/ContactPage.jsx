@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Phone, Mail, MapPin, Clock, Send, CheckCircle2, MessageSquare } from 'lucide-react';
+import { useSettings } from '../context/SettingsContext';
 
 const Reveal = ({ children, delay = 0 }) => (
   <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }}
@@ -8,6 +9,7 @@ const Reveal = ({ children, delay = 0 }) => (
 );
 
 export default function ContactPage() {
+  const { settings } = useSettings();
   const [form, setForm] = useState({ name:'', email:'', phone:'', subject:'general', message:'' });
   const [submitted, setSubmitted] = useState(false);
 
@@ -18,10 +20,10 @@ export default function ContactPage() {
   };
 
   const contacts = [
-    { icon: Phone, title: 'Call Us', value: '+44 123 456 7890', link: 'tel:+441234567890', desc: 'Mon-Sat, 9AM-6PM GMT' },
-    { icon: Mail, title: 'Email Us', value: 'info@borderlesstrips.com', link: 'mailto:info@borderlesstrips.com', desc: 'We reply within 2 hours' },
-    { icon: MapPin, title: 'Visit Us', value: 'London, United Kingdom', link: '#', desc: 'By appointment only' },
-    { icon: MessageSquare, title: 'WhatsApp', value: 'Chat with us', link: 'https://wa.me/441234567890', desc: 'Instant messaging' },
+    { icon: Phone, title: 'Call Us', value: settings.phone || '+44 123 456 7890', link: `tel:${(settings.phone || '+44 123 456 7890').replace(/\s+/g, '')}`, desc: 'Mon-Sat, 9AM-6PM GMT' },
+    { icon: Mail, title: 'Email Us', value: settings.email || 'info@borderlesstrips.com', link: `mailto:${settings.email || 'info@borderlesstrips.com'}`, desc: 'We reply within 2 hours' },
+    { icon: MapPin, title: 'Visit Us', value: settings.address || 'London, United Kingdom', link: '#', desc: 'By appointment only' },
+    { icon: MessageSquare, title: 'WhatsApp', value: 'Chat with us', link: `https://wa.me/${(settings.whatsapp || '441234567890').replace(/[+\s]+/g, '')}`, desc: 'Instant messaging' },
   ];
 
   return (
@@ -107,7 +109,7 @@ export default function ContactPage() {
                         <Send size={18}/> Send Message
                       </button>
                       <a 
-                        href={`https://wa.me/441234567890?text=${encodeURIComponent(`Hello Borderless Trips! I would like to book a consultation about ${form.subject === 'general' ? 'general travel enquiry' : form.subject + ' services'}. My name is ${form.name || 'Guest'}.`)}`}
+                        href={`https://wa.me/${(settings.whatsapp || '441234567890').replace(/[+\s]+/g, '')}?text=${encodeURIComponent(`Hello ${settings.business_name || 'Borderless Trips'}! I would like to book a consultation about ${form.subject === 'general' ? 'general travel enquiry' : form.subject + ' services'}. My name is ${form.name || 'Guest'}.`)}`}
                         target="_blank" 
                         rel="noopener noreferrer" 
                         className="btn btn-success btn-lg" 

@@ -93,6 +93,104 @@ router.put('/profile', authenticate, async (req, res) => {
   }
 });
 
+// POST /api/auth/forgot-password - Request a password reset email
+router.post('/forgot-password', authLimiter, async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email is required.' });
+
+  try {
+    const user = await db.prepare('SELECT id, name, email FROM users WHERE email = ?').get(email.toLowerCase());
+
+    // Always return success to prevent email enumeration attacks
+    if (!user) {
+      return res.json({ message: 'If an account exists with that email, a reset link has been sent.' });
+    }
+
+    // Generate a time-limited JWT reset token (1 hour expiry)
+    const resetToken = jwt.sign(
+      { id: user.id, email: user.email, purpose: 'password_reset' },
+      JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    // Build reset URL (frontend route)
+    const siteUrl = process.env.SITE_URL || `${req.protocol}://${req.get('host').replace(':3001', ':5173')}`;
+    const resetUrl = `${siteUrl}/reset-password?token=${resetToken}`;
+
+    // Send reset email
+    const { sendMail, getEmailTemplate } = require('../utils/mailer');
+    const emailHtml = getEmailTemplate(
+      'Reset Your Password',
+      'You requested a password reset for your Borderless Trips account',
+      `
+        <h1 class="h1">Reset Your Password</h1>
+        <p class="p">Hi ${user.name || 'there'},</p>
+        <p class="p">We received a request to reset the password for your Borderless Trips account. Click the button below to set a new password:</p>
+        <div class="button-container">
+          <a href="${resetUrl}" class="button">Reset Password</a>
+        </div>
+        <p class="p" style="font-size:13px; color:#64748b;">This link will expire in <strong>1 hour</strong>. If you didn't request this, you can safely ignore this email — your password won't change.</p>
+        <div class="card">
+          <p style="font-size:12px; color:#94a3b8; margin:0; word-break:break-all;">If the button doesn't work, copy and paste this URL into your browser:<br/>${resetUrl}</p>
+        </div>
+      `
+    );
+
+    await sendMail({
+      to: user.email,
+      subject: 'Reset Your Password — Borderless Trips',
+      html: emailHtml,
+      text: `Reset your password: ${resetUrl}`
+    });
+
+    res.json({ message: 'If an account exists with that email, a reset link has been sent.' });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ error: 'Failed to process password reset request.' });
+  }
+});
+
+// POST /api/auth/reset-password - Reset password using token
+router.post('/reset-password', authLimiter, async (req, res) => {
+  const { token, password } = req.body;
+  if (!token || !password) {
+    return res.status(400).json({ error: 'Token and new password are required.' });
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+  }
+
+  try {
+    // Verify the reset token
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    if (decoded.purpose !== 'password_reset') {
+      return res.status(400).json({ error: 'Invalid reset token.' });
+    }
+
+    // Check user still exists
+    const user = await db.prepare('SELECT id, email FROM users WHERE id = ? AND email = ?').get(decoded.id, decoded.email);
+    if (!user) {
+      return res.status(400).json({ error: 'User account not found.' });
+    }
+
+    // Hash the new password and update
+    const hash = bcrypt.hashSync(password, 10);
+    await db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, user.id);
+
+    res.json({ message: 'Password has been reset successfully. You can now log in with your new password.' });
+  } catch (error) {
+    if (error.name === 'TokenExpiredError') {
+      return res.status(400).json({ error: 'This reset link has expired. Please request a new one.' });
+    }
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(400).json({ error: 'Invalid reset link. Please request a new one.' });
+    }
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: 'Failed to reset password.' });
+  }
+});
+
 // GET /api/auth/customers - List all registered customers (Admin Only)
 router.get('/customers', authenticate, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only.' });

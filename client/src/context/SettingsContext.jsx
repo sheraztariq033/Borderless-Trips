@@ -9,6 +9,7 @@ export function SettingsProvider({ children }) {
     phone: '+44 123 456 7890',
     email: 'info@borderlesstrips.com',
     whatsapp: '+441234567890',
+    website_url: 'https://palegreen-bison-521258.hostingersite.com',
     bank_name: 'Barclays',
     account_name: 'Borderless Trips Ltd',
     sort_code: '20-XX-XX',

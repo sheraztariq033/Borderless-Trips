@@ -321,7 +321,7 @@ export default function HomePage() {
                   <button onClick={() => openEvaluation()} className="btn btn-secondary btn-lg" id="visa-cta-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, border: 'none', cursor: 'pointer' }}>
                     <Shield size={18} /> Start Free Assessment
                   </button>
-                  <a href="tel:+441234567890" className="btn btn-outline btn-lg" style={{ borderColor: 'rgba(255,255,255,0.3)', color: 'white' }}>
+                  <a href={`tel:${(settings.phone || '+44 123 456 7890').replace(/\s+/g, '')}`} className="btn btn-outline btn-lg" style={{ borderColor: 'rgba(255,255,255,0.3)', color: 'white' }}>
                     <Phone size={18} /> Call Us Now
                   </a>
                 </div>

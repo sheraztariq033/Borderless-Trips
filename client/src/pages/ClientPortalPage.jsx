@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { useSettings } from '../context/SettingsContext';
 import { api } from '../utils/api';
 import { supabase } from '../utils/supabase';
 import {
@@ -9,7 +10,7 @@ import {
   CheckCircle2, AlertCircle, Package, DollarSign, Send, MessageSquare,
   Plus, ChevronRight, Globe, Shield, Calendar, Users as UsersIcon,
   MapPin, X, ArrowRight, Download, Eye, Menu, ClipboardList,
-  Briefcase, Hotel, HelpCircle, Phone, Gift, PenTool, Award
+  Briefcase, Hotel, HelpCircle, Phone, Gift, PenTool, Award, Paperclip
 } from 'lucide-react';
 
 const tabs = [
@@ -137,76 +138,150 @@ function PortalCaseExtensions({ item, type, loadPortalData, setSigningFile, setA
     <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column', gap: 16 }}>
       
       {/* 1. Premium Banking Card & Invoicing Details */}
-      {item.payment_status !== 'paid' && item.status !== 'cancelled' && (
-        <div>
-          <h4 style={{ fontSize:13, fontWeight:700, marginBottom:8, color:'var(--color-text-secondary)' }}>💳 Banking Details & Invoice</h4>
-          <div style={{
-            background: 'linear-gradient(135deg, #1E293B 0%, #0F172A 100%)',
-            color: '#F8FAFC',
-            borderRadius: 12,
-            padding: 20,
-            boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
-            border: '1px solid rgba(245, 158, 11, 0.25)',
-            position: 'relative',
-            overflow: 'hidden',
-            marginBottom: 12
-          }}>
-            <div style={{ position: 'absolute', top: -30, right: -30, width: 120, height: 120, borderRadius: '50%', background: 'rgba(245, 158, 11, 0.04)' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#F59E0B' }}>Official Bank Transfer</span>
-              <span style={{ fontSize: 13, fontWeight: 800, color: 'white', letterSpacing: '0.5px' }}>BARCLAYS</span>
-            </div>
-            <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: '0.5px', marginBottom: 14, color: 'white' }}>Borderless Trips Ltd</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, fontSize: 12, marginBottom: 14 }}>
+      {item.payment_requested === 1 && item.payment_status !== 'paid' && item.status !== 'cancelled' && (
+        <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--color-border)', borderRadius: 12, padding: 20, marginTop: 4 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h4 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+              💳 Payment Requested
+            </h4>
+            <span style={{ fontSize: 11, background: 'rgba(245, 158, 11, 0.1)', color: '#F59E0B', border: '1px solid rgba(245, 158, 11, 0.2)', padding: '2px 8px', borderRadius: 4, fontWeight: 600 }}>
+              Action Required
+            </span>
+          </div>
+
+          {/* Dynamic Amount Card */}
+          <div style={{ background: 'linear-gradient(135deg, #1E293B 0%, #0F172A 100%)', borderRadius: 10, padding: 18, border: '1px solid rgba(245, 158, 11, 0.25)', position: 'relative', overflow: 'hidden', marginBottom: 16 }}>
+            <div style={{ position: 'absolute', top: -30, right: -30, width: 100, height: 100, borderRadius: '50%', background: 'rgba(245, 158, 11, 0.04)' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
               <div>
-                <span style={{ color: '#94A3B8', fontSize: 9, textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>Sort Code</span>
-                <span style={{ fontWeight: 600, fontFamily: 'monospace', color: 'white' }}>20-XX-XX</span>
+                <span style={{ color: '#94A3B8', fontSize: 10, textTransform: 'uppercase', display: 'block', letterSpacing: '0.5px' }}>Total Amount Due</span>
+                <span style={{ fontSize: 24, fontWeight: 800, color: 'white', display: 'block', marginTop: 4 }}>
+                  {settings.currency || '£'}{parseFloat(item.total_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
               </div>
-              <div>
-                <span style={{ color: '#94A3B8', fontSize: 9, textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>Account Number</span>
-                <span style={{ fontWeight: 600, fontFamily: 'monospace', color: 'white' }}>XXXXXXXX</span>
-              </div>
-            </div>
-            <div style={{ fontSize: 11, color: '#CBD5E1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.05)', padding: '8px 12px', borderRadius: 6 }}>
-              <span><strong>Reference:</strong> BT-{item.id}-{item.booking_ref || item.app_ref}</span>
               {item.invoice_url && (
-                <a href={item.invoice_url} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '4px 8px', background: 'var(--color-secondary)', color: '#000', fontWeight: 'bold', borderRadius: 4 }}>
-                  <Download size={12}/> Invoice
+                <a href={item.invoice_url} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 12px', background: 'var(--color-secondary)', color: '#000', fontWeight: 600, borderRadius: 6 }}>
+                  <Download size={13}/> View Invoice
                 </a>
               )}
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* 2. Specific custom payment options & Upload evidence */}
-      {payments.length > 0 && (
-        <div>
-          <h4 style={{ fontSize:13, fontWeight:700, marginBottom:8, color:'var(--color-text-secondary)' }}>💳 Specific Payment Options</h4>
-          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-            {payments.map((p, i) => (
-              <div key={i} style={{ background:'var(--color-bg)', padding:'10px 14px', borderRadius:6, fontSize:12, border:'1px solid var(--color-border)' }}>
-                <div style={{ fontWeight:600 }}>{p.bank_name}</div>
-                <div style={{ color:'var(--color-text-muted)', marginTop:2 }}>{p.account_name} • {p.account_number}</div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 14 }}>
+              <div>
+                <span style={{ color: '#94A3B8', fontSize: 9, textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>Payment Reference</span>
+                <span style={{ fontWeight: 600, color: 'white', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <code>BT-{item.id}-{item.booking_ref || item.app_ref}</code>
+                  <button 
+                    onClick={() => { navigator.clipboard.writeText(`BT-${item.id}-${item.booking_ref || item.app_ref}`); alert('Payment reference copied!'); }} 
+                    style={{ background: 'transparent', border: 'none', color: '#94A3B8', cursor: 'pointer', display: 'inline-flex', padding: 0 }}
+                    title="Copy Reference"
+                  >
+                    📋
+                  </button>
+                </span>
               </div>
-            ))}
+              <div>
+                <span style={{ color: '#94A3B8', fontSize: 9, textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>Payment Status</span>
+                <span style={{ fontWeight: 700, color: '#F59E0B', textTransform: 'uppercase', fontSize: 11, letterSpacing: '0.5px' }}>
+                  {item.payment_status || 'unpaid'}
+                </span>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
 
-      {item.status !== 'cancelled' && (
-        <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap: 'wrap' }}>
-          {!item.payment_proof ? (
-            <label className="btn btn-primary btn-sm" style={{ cursor:'pointer' }}>
-              <Upload size={14}/> {uploading ? 'Uploading...' : 'Upload Payment Receipt'}
-              <input type="file" disabled={uploading} onChange={handleProofUpload} style={{ display:'none' }} accept="image/*,.pdf"/>
-            </label>
-          ) : (
-            <div style={{ fontSize:12, background:'rgba(16, 185, 129, 0.08)', padding:'8px 14px', borderRadius:6, display:'flex', alignItems: 'center', gap: 8, border: '1px solid rgba(16,185,129,0.2)', color: 'var(--color-success)' }}>
-              <span>✅ Payment proof uploaded. We are verifying it.</span>
-              <a href={item.payment_proof} target="_blank" rel="noreferrer" style={{ color:'var(--color-success)', fontWeight:700, textDecoration: 'underline' }}>View Receipt</a>
+          {/* Bank Transfer Details Box */}
+          <div style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+            <h5 style={{ fontSize: 12, fontWeight: 700, margin: '0 0 12px 0', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              🏛️ Official Bank Transfer details
+            </h5>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, fontSize: 12 }}>
+              <div>
+                <span style={{ color: 'var(--color-text-muted)', fontSize: 10, display: 'block', marginBottom: 2 }}>Bank Name</span>
+                <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>{settings.bank_name || 'BARCLAYS'}</span>
+              </div>
+              <div>
+                <span style={{ color: 'var(--color-text-muted)', fontSize: 10, display: 'block', marginBottom: 2 }}>Account Name</span>
+                <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>{settings.account_name || 'Borderless Trips Ltd'}</span>
+              </div>
+              <div>
+                <span style={{ color: 'var(--color-text-muted)', fontSize: 10, display: 'block', marginBottom: 2 }}>Sort Code</span>
+                <span style={{ fontWeight: 600, color: 'var(--color-text)', fontFamily: 'monospace' }}>
+                  {settings.sort_code || '20-XX-XX'}
+                  <button 
+                    onClick={() => { navigator.clipboard.writeText(settings.sort_code || '20-XX-XX'); alert('Sort code copied!'); }} 
+                    style={{ background: 'transparent', border: 'none', color: '#94A3B8', cursor: 'pointer', marginLeft: 4 }}
+                    title="Copy Sort Code"
+                  >
+                    📋
+                  </button>
+                </span>
+              </div>
+              <div>
+                <span style={{ color: 'var(--color-text-muted)', fontSize: 10, display: 'block', marginBottom: 2 }}>Account Number</span>
+                <span style={{ fontWeight: 600, color: 'var(--color-text)', fontFamily: 'monospace' }}>
+                  {settings.account_number || 'XXXXXXXX'}
+                  <button 
+                    onClick={() => { navigator.clipboard.writeText(settings.account_number || 'XXXXXXXX'); alert('Account number copied!'); }} 
+                    style={{ background: 'transparent', border: 'none', color: '#94A3B8', cursor: 'pointer', marginLeft: 4 }}
+                    title="Copy Account Number"
+                  >
+                    📋
+                  </button>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Specific Custom Payments (if any) */}
+          {payments.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <h5 style={{ fontSize: 12, fontWeight: 700, margin: '0 0 8px 0', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                💳 Alternative Bank Options
+              </h5>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
+                {payments.map((p, i) => (
+                  <div key={i} style={{ background: 'var(--color-bg)', padding: 12, borderRadius: 8, fontSize: 12, border: '1px solid var(--color-border)' }}>
+                    <div style={{ fontWeight: 600 }}>{p.bank_name}</div>
+                    <div style={{ color: 'var(--color-text-muted)', marginTop: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>{p.account_name} • {p.account_number}</span>
+                      <button 
+                        onClick={() => { navigator.clipboard.writeText(p.account_number); alert('Account number copied!'); }} 
+                        style={{ background: 'transparent', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: 0 }}
+                        title="Copy"
+                      >
+                        📋
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
+
+          {/* Payment receipt upload wrapper */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'rgba(255,255,255,0.02)', padding: 14, borderRadius: 8, border: '1px dashed var(--color-border)' }}>
+            <div style={{ flex: 1 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, display: 'block', color: 'var(--color-text)' }}>Have you made the transfer?</span>
+              <span style={{ fontSize: 10, color: 'var(--color-text-muted)', display: 'block', marginTop: 2 }}>Upload your payment receipt / bank transaction receipt for validation.</span>
+            </div>
+            {!item.payment_proof ? (
+              <label className="btn btn-primary btn-sm" style={{ cursor: 'pointer', margin: 0, whiteSpace: 'nowrap' }}>
+                <Upload size={14} style={{ marginRight: 4 }} /> {uploading ? 'Uploading...' : 'Upload Receipt'}
+                <input type="file" disabled={uploading} onChange={handleProofUpload} style={{ display: 'none' }} accept="image/*,.pdf"/>
+              </label>
+            ) : null}
+          </div>
+        </div>
+      )}
+
+      {item.payment_proof && (
+        <div style={{ fontSize: 12, background: 'rgba(16, 185, 129, 0.08)', padding: '10px 14px', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid rgba(16, 185, 129, 0.2)', color: 'var(--color-success)', marginTop: 4 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            ✅ Payment proof uploaded. We are verifying your transfer.
+          </span>
+          <a href={item.payment_proof} target="_blank" rel="noreferrer" style={{ color: 'var(--color-success)', fontWeight: 700, textDecoration: 'underline', fontSize: 12 }}>
+            View Receipt
+          </a>
         </div>
       )}
 
@@ -400,6 +475,7 @@ function PortalCaseExtensions({ item, type, loadPortalData, setSigningFile, setA
 
 export default function ClientPortalPage() {
   const { user, loading: authLoading, logout, updateProfile } = useAuth();
+  const { settings } = useSettings();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [docSubTab, setDocSubTab] = useState('all');
@@ -421,6 +497,8 @@ export default function ClientPortalPage() {
   const [sendingMsg, setSendingMsg] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
+  const [uploadingChatFile, setUploadingChatFile] = useState(false);
+  const chatFileInputRef = useRef(null);
   const msgEndRef = useRef(null);
 
   // Service request form
@@ -719,6 +797,35 @@ export default function ClientPortalPage() {
       setMessages(msgsData);
     } catch (err) { alert('Failed: ' + err.message); }
     finally { setSendingMsg(false); }
+  };
+
+  const handleAttachFile = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      setUploadingChatFile(true);
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const res = await api.post('/upload', formData);
+      
+      // Send message immediately with the uploaded attachment
+      await api.post('/messages', {
+        message: '',
+        attachment_url: res.url,
+        attachment_name: res.filename,
+        attachment_type: res.mimetype
+      });
+      
+      // Refresh messages
+      const msgsData = await api.get('/messages');
+      setMessages(msgsData);
+    } catch (err) {
+      alert('Failed to upload file: ' + err.message);
+    } finally {
+      setUploadingChatFile(false);
+      if (chatFileInputRef.current) chatFileInputRef.current.value = '';
+    }
   };
 
   const handleMarkNotifsRead = async () => {
@@ -1955,6 +2062,8 @@ export default function ClientPortalPage() {
                         )}
                         {messages.map((msg,i) => {
                           const isSelf = msg.sender === 'customer';
+                          const hasAttachment = !!msg.attachment_url;
+                          const isImage = hasAttachment && msg.attachment_type && msg.attachment_type.toLowerCase().startsWith('image/');
                           return (
                             <div key={i} style={{ display:'flex', justifyContent:isSelf?'flex-end':'flex-start', gap:8, alignItems:'flex-start' }}>
                               {!isSelf && (
@@ -1971,7 +2080,30 @@ export default function ClientPortalPage() {
                                 borderBottomRightRadius:isSelf?4:14,
                                 borderBottomLeftRadius:isSelf?14:4,
                               }}>
-                                {msg.message}
+                                {isImage && (
+                                  <div style={{ marginBottom: msg.message ? 8 : 0, overflow:'hidden', borderRadius:8 }}>
+                                    <a href={msg.attachment_url} target="_blank" rel="noopener noreferrer">
+                                      <img src={msg.attachment_url} alt={msg.attachment_name || "Uploaded Image"} style={{ maxWidth:'100%', maxHeight:200, display:'block', objectFit:'cover', borderRadius:6 }} />
+                                    </a>
+                                  </div>
+                                )}
+                                {hasAttachment && !isImage && (
+                                  <a href={msg.attachment_url} target="_blank" rel="noopener noreferrer" style={{
+                                    display:'flex', alignItems:'center', gap:10, textDecoration:'none',
+                                    padding:'8px 12px', background:isSelf?'rgba(255,255,255,0.1)':'var(--color-bg-alt)',
+                                    borderRadius:8, color:isSelf?'#ffffff':'var(--color-text)',
+                                    marginBottom: msg.message ? 8 : 0, border:isSelf?'1px solid rgba(255,255,255,0.15)':'1px solid var(--color-border)'
+                                  }}>
+                                    <div style={{ background:isSelf?'rgba(255,255,255,0.15)':'rgba(14,165,233,0.1)', color:isSelf?'#ffffff':'#0ea5e9', padding:6, borderRadius:6 }}>
+                                      <FileText size={18} />
+                                    </div>
+                                    <div style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, fontSize:12 }}>
+                                      <div style={{ fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{msg.attachment_name || 'Attachment'}</div>
+                                      <div style={{ fontSize:10, opacity:0.8 }}>Click to download</div>
+                                    </div>
+                                  </a>
+                                )}
+                                {msg.message && <div style={{ wordBreak:'break-word' }}>{msg.message}</div>}
                                 <div style={{ fontSize:10, opacity:0.6, marginTop:4, textAlign:'right' }}>
                                   {new Date(msg.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
                                 </div>
@@ -1986,16 +2118,25 @@ export default function ClientPortalPage() {
                         })}
                         <div ref={msgEndRef}/>
                       </div>
-                      <div style={{ display:'flex', gap:6, padding:'8px 12px', borderTop:'1px solid var(--color-border)' }}>
+                      <div style={{ display:'flex', gap:6, padding:'8px 12px', borderTop:'1px solid var(--color-border)', alignItems:'center' }}>
+                        <input type="file" ref={chatFileInputRef} onChange={handleAttachFile} style={{ display:'none' }} />
+                        <button className="btn btn-outline btn-icon" onClick={() => chatFileInputRef.current?.click()} disabled={uploadingChatFile || sendingMsg} style={{ flexShrink:0, width:40, height:40, display:'flex', alignItems:'center', justifyContent:'center' }} title="Attach image or file">
+                          {uploadingChatFile ? (
+                            <div className="spinner-border" style={{ width:16, height:16, border:'2px solid var(--color-secondary)', borderTopColor:'transparent', borderRadius:'50%', animation:'spin 1s linear infinite' }} />
+                          ) : (
+                            <Paperclip size={16}/>
+                          )}
+                        </button>
                         <input
                           className="form-input"
-                          placeholder="Type your message..."
+                          placeholder={uploadingChatFile ? "Uploading attachment..." : "Type your message..."}
                           value={msgInput}
                           onChange={e => setMsgInput(e.target.value)}
                           onKeyDown={e => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }}}
                           style={{ flex:1, border:'none', background:'transparent', padding:'8px 14px' }}
+                          disabled={uploadingChatFile}
                         />
-                        <button className="btn btn-primary btn-icon" onClick={handleSendMessage} disabled={sendingMsg || !msgInput.trim()} style={{ flexShrink:0, width:40, height:40 }}>
+                        <button className="btn btn-primary btn-icon" onClick={handleSendMessage} disabled={sendingMsg || uploadingChatFile || (!msgInput.trim())} style={{ flexShrink:0, width:40, height:40 }}>
                           <Send size={16}/>
                         </button>
                       </div>

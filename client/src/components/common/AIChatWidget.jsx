@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, X, Send, Bot, User, ChevronRight, RotateCcw, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useSettings } from '../../context/SettingsContext';
 
 const ELIGIBILITY_QUESTIONS = [
   {
@@ -141,6 +142,7 @@ const QUICK_ACTIONS = [
 ];
 
 export default function AIChatWidget() {
+  const { settings } = useSettings();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState(() => {
     const saved = sessionStorage.getItem('bt_chat_messages');
@@ -556,7 +558,7 @@ export default function AIChatWidget() {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                               {/* WhatsApp Button */}
                               <a 
-                                href={`https://wa.me/441234567890?text=${encodeURIComponent(`Hello! My Schengen visa eligibility score is ${msg.extra.result.score}% (${msg.extra.result.level} eligibility). I just submitted my profile under email ${saveForm.email} and would like to proceed with a consultation.`)}`}
+                                href={`https://wa.me/${(settings.whatsapp || '441234567890').replace(/[+\s]+/g, '')}?text=${encodeURIComponent(`Hello! My Schengen visa eligibility score is ${msg.extra.result.score}% (${msg.extra.result.level} eligibility). I just submitted my profile under email ${saveForm.email} and would like to proceed with a consultation.`)}`}
                                 target="_blank" 
                                 rel="noopener noreferrer" 
                                 className="btn btn-success btn-sm" 
@@ -597,10 +599,10 @@ export default function AIChatWidget() {
                               {/* WhatsApp button */}
                               <a 
                                 href={msg.extra.service === 'packages' 
-                                  ? `https://wa.me/441234567890?text=${encodeURIComponent("Hello Borderless Trips! I am interested in holiday packages. I would like to book a consultation.")}`
+                                  ? `https://wa.me/${(settings.whatsapp || '441234567890').replace(/[+\s]+/g, '')}?text=${encodeURIComponent(`Hello ${settings.business_name || 'Borderless Trips'}! I am interested in holiday packages. I would like to book a consultation.`)}`
                                   : msg.extra.service === 'flights'
-                                  ? `https://wa.me/441234567890?text=${encodeURIComponent("Hello Borderless Trips! I need flight booking assistance. Could you help me with a quote?")}`
-                                  : `https://wa.me/441234567890?text=${encodeURIComponent("Hello Borderless Trips! I would like to speak to an agent for consultation.")}`
+                                  ? `https://wa.me/${(settings.whatsapp || '441234567890').replace(/[+\s]+/g, '')}?text=${encodeURIComponent(`Hello ${settings.business_name || 'Borderless Trips'}! I need flight booking assistance. Could you help me with a quote?`)}`
+                                  : `https://wa.me/${(settings.whatsapp || '441234567890').replace(/[+\s]+/g, '')}?text=${encodeURIComponent(`Hello ${settings.business_name || 'Borderless Trips'}! I would like to speak to an agent for consultation.`)}`
                                 }
                                 target="_blank" 
                                 rel="noopener noreferrer" 
@@ -612,7 +614,7 @@ export default function AIChatWidget() {
 
                               {/* Email button */}
                               <a 
-                                href={`mailto:info@borderlesstrips.com?subject=${encodeURIComponent(msg.extra.service === 'packages' ? 'Holiday Package Enquiry' : msg.extra.service === 'flights' ? 'Flight Enquiry' : 'Consultation Request')}&body=${encodeURIComponent("Hello Borderless Trips,\n\nI would like to enquire about your services.")}`}
+                                href={`mailto:${settings.email || 'info@borderlesstrips.com'}?subject=${encodeURIComponent(msg.extra.service === 'packages' ? 'Holiday Package Enquiry' : msg.extra.service === 'flights' ? 'Flight Enquiry' : 'Consultation Request')}&body=${encodeURIComponent(`Hello ${settings.business_name || 'Borderless Trips'},\n\nI would like to enquire about your services.`)}`}
                                 className="btn btn-outline btn-xs" 
                                 style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 9px', fontSize: 11, textDecoration: 'none', borderRadius: 4, fontWeight: 600, border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
                               >
@@ -621,7 +623,7 @@ export default function AIChatWidget() {
 
                               {/* Call button */}
                               <a 
-                                href="tel:+441234567890"
+                                href={`tel:${(settings.phone || '+44 123 456 7890').replace(/\s+/g, '')}`}
                                 className="btn btn-outline btn-xs" 
                                 style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 9px', fontSize: 11, textDecoration: 'none', borderRadius: 4, fontWeight: 600, border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
                               >
@@ -728,7 +730,7 @@ export default function AIChatWidget() {
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                               <a 
-                                href={`https://wa.me/441234567890?text=${encodeURIComponent(`Hello! I just submitted a ${msg.extra.service === 'packages' ? 'Holiday Package' : msg.extra.service === 'flights' ? 'Flight Booking' : 'Consultation'} request under email ${serviceForm.email}. I would like to proceed with a consultation.`)}`}
+                                href={`https://wa.me/${(settings.whatsapp || '441234567890').replace(/[+\s]+/g, '')}?text=${encodeURIComponent(`Hello! I just submitted a ${msg.extra.service === 'packages' ? 'Holiday Package' : msg.extra.service === 'flights' ? 'Flight Booking' : 'Consultation'} request under email ${serviceForm.email}. I would like to proceed with a consultation.`)}`}
                                 target="_blank" 
                                 rel="noopener noreferrer" 
                                 className="btn btn-success btn-sm" 

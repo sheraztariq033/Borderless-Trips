@@ -11,7 +11,7 @@ import {
   Send, X, Eye, ChevronDown, Mail, Plane, Globe, Shield,
   Calendar, Menu, Save, RefreshCw, Image, ChevronLeft, ChevronRight,
   UserPlus, Flag, Inbox, Filter, ArrowUpDown, ExternalLink,
-  Check, XCircle, ClipboardList, Briefcase, MapPin
+  Check, XCircle, ClipboardList, Briefcase, MapPin, Paperclip
 } from 'lucide-react';
 
 const tabs = [
@@ -140,12 +140,81 @@ function CaseExtensions({ detailModal, setDetailModal, loadAllData, user, showTo
   const [localSignatureLink, setLocalSignatureLink] = useState(data.signature_link || '');
   const [localSignatureDoc, setLocalSignatureDoc] = useState(data.signature_doc || '');
 
+  // Moved states from nested IIFEs to comply with React rules of hooks
+  const [internalNotesList, setInternalNotesList] = useState([]);
+  const [newNoteText, setNewNoteText] = useState('');
+  const [notesLoading, setNotesLoading] = useState(false);
+
+  const [openForm, setOpenForm] = useState(false);
+  const [fDest, setFDest] = useState(data.country || '');
+  const [fDate, setFDate] = useState('');
+  const [fNotes, setFNotes] = useState(`Converted from travel file ${data.booking_ref || data.app_ref}.`);
+  const [saving, setSaving] = useState(false);
+
+  const loadInternalNotes = async () => {
+    try {
+      const ref = data.booking_ref || data.app_ref;
+      if (!ref) return;
+      const res = await api.get(`/business-suite/internal-notes/${ref}`);
+      setInternalNotesList(res || []);
+    } catch (err) {
+      console.error('Failed to load internal notes:', err);
+    }
+  };
+
+  const handleAddInternalNote = async (e) => {
+    e.preventDefault();
+    if (!newNoteText.trim()) return;
+    setNotesLoading(true);
+    try {
+      const ref = data.booking_ref || data.app_ref;
+      const res = await api.post(`/business-suite/internal-notes/${ref}`, { note: newNoteText.trim() });
+      setInternalNotesList(prev => [...prev, res.note]);
+      setNewNoteText('');
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setNotesLoading(false);
+    }
+  };
+
+  const handleFutureLeadSubmit = async (e) => {
+    e.preventDefault();
+    if (!fDate) return;
+    setSaving(true);
+    try {
+      await api.post('/business-suite/future-leads', {
+        name: data.customer_name || data.name,
+        email: data.customer_email || data.email,
+        phone: data.customer_phone || data.phone || '',
+        destination: fDest,
+        intended_travel_date: fDate,
+        notes: fNotes
+      });
+      showToast('Registered as future travel plan successfully!');
+      setOpenForm(false);
+      await loadAllData();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   useEffect(() => {
     setLocalNotes(data.notes || '');
     setLocalInvoiceUrl(data.invoice_url || '');
     setLocalSignatureLink(data.signature_link || '');
     setLocalSignatureDoc(data.signature_doc || '');
-  }, [data.id, data.notes, data.invoice_url, data.signature_link, data.signature_doc]);
+    
+    // Reset converted lead form state
+    setFDest(data.country || '');
+    setFNotes(`Converted from travel file ${data.booking_ref || data.app_ref}.`);
+    setFDate('');
+    setOpenForm(false);
+
+    loadInternalNotes();
+  }, [data.id, data.notes, data.invoice_url, data.signature_link, data.signature_doc, data.booking_ref, data.app_ref, data.country]);
 
   if (!isVisa && !isBooking) return null;
 
@@ -263,6 +332,28 @@ function CaseExtensions({ detailModal, setDetailModal, loadAllData, user, showTo
           >
             {data.edit_unlocked === 1 ? 'Lock Edit Mode' : 'Unlock Edit Mode'}
           </button>
+        </div>
+
+        {/* Payment Request Control */}
+        <div style={{ background: data.payment_requested === 1 ? 'rgba(245, 158, 11, 0.04)' : 'rgba(255,255,255,0.01)', border: '1px solid var(--color-border)', borderRadius: 8, padding: 14, marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <span style={{ fontWeight: 700, fontSize: 13, display: 'block', color: 'var(--color-text)' }}>💳 Payment Request Status</span>
+              <span style={{ fontSize: 11, color: 'var(--color-text-muted)', display: 'block', marginTop: 2 }}>
+                {data.payment_requested === 1 
+                  ? 'Active: Banking details and invoice are visible in customer portal.' 
+                  : 'Inactive: Banking and invoicing details are hidden from customer.'}
+              </span>
+            </div>
+            <button 
+              className={data.payment_requested === 1 ? 'btn btn-secondary btn-sm' : 'btn btn-primary btn-sm'}
+              onClick={() => updateField('payment_requested', data.payment_requested === 1 ? 0 : 1)}
+              style={{ minWidth: 120, height: 32, margin: 0, textTransform: 'none', fontWeight: 600, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+              disabled={loading}
+            >
+              {data.payment_requested === 1 ? '🛑 Cancel Request' : '⚡ Request Payment'}
+            </button>
+          </div>
         </div>
 
         {/* Invoice URL and Upload */}
@@ -467,65 +558,24 @@ function CaseExtensions({ detailModal, setDetailModal, loadAllData, user, showTo
         </p>
 
         <div style={{ display:'flex', flexDirection:'column', gap:8, maxHeight:200, overflowY:'auto', background:'var(--color-bg)', padding:12, borderRadius:8, border:'1px solid var(--color-border)', marginBottom:10 }}>
-          {(() => {
-            const [internalNotes, setInternalNotes] = useState([]);
-            const [newNoteText, setNewNoteText] = useState('');
-            const [notesLoading, setNotesLoading] = useState(false);
-
-            const loadInternalNotes = async () => {
-              try {
-                const ref = data.booking_ref || data.app_ref;
-                if (!ref) return;
-                const res = await api.get(`/business-suite/internal-notes/${ref}`);
-                setInternalNotes(res || []);
-              } catch (err) {
-                console.error('Failed to load internal notes:', err);
-              }
-            };
-
-            useEffect(() => {
-              loadInternalNotes();
-            }, [data.booking_ref, data.app_ref]);
-
-            const handleAddInternalNote = async (e) => {
-              e.preventDefault();
-              if (!newNoteText.trim()) return;
-              setNotesLoading(true);
-              try {
-                const ref = data.booking_ref || data.app_ref;
-                const res = await api.post(`/business-suite/internal-notes/${ref}`, { note: newNoteText.trim() });
-                setInternalNotes([...internalNotes, res.note]);
-                setNewNoteText('');
-              } catch (err) {
-                showToast(err.message, 'error');
-              } finally {
-                setNotesLoading(false);
-              }
-            };
-
-            return (
-              <>
-                <div style={{ display:'flex', flexDirection:'column', gap:8, overflowY:'auto', maxHeight:150 }}>
-                  {internalNotes.length > 0 ? internalNotes.map((note, idx) => (
-                    <div key={idx} style={{ fontSize:12, borderBottom:'1px solid var(--color-border)', paddingBottom:6 }}>
-                      <div style={{ display:'flex', justifyContent:'space-between', color:'var(--color-text-muted)', fontSize:10, marginBottom:2 }}>
-                        <strong>👤 {note.created_by_name} ({note.created_by_role})</strong>
-                        <span>{new Date(note.created_at).toLocaleString()}</span>
-                      </div>
-                      <p style={{ margin:0, color:'var(--color-text)' }}>{note.note}</p>
-                    </div>
-                  )) : (
-                    <div className="text-muted" style={{ fontSize:11, textAlign:'center', padding:'10px 0' }}>No staff comments posted yet.</div>
-                  )}
+          <div style={{ display:'flex', flexDirection:'column', gap:8, overflowY:'auto', maxHeight:150 }}>
+            {internalNotesList.length > 0 ? internalNotesList.map((note, idx) => (
+              <div key={idx} style={{ fontSize:12, borderBottom:'1px solid var(--color-border)', paddingBottom:6 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', color:'var(--color-text-muted)', fontSize:10, marginBottom:2 }}>
+                  <strong>👤 {note.created_by_name} ({note.created_by_role})</strong>
+                  <span>{new Date(note.created_at).toLocaleString()}</span>
                 </div>
+                <p style={{ margin:0, color:'var(--color-text)' }}>{note.note}</p>
+              </div>
+            )) : (
+              <div className="text-muted" style={{ fontSize:11, textAlign:'center', padding:'10px 0' }}>No staff comments posted yet.</div>
+            )}
+          </div>
 
-                <form onSubmit={handleAddInternalNote} style={{ display:'flex', gap:8, borderTop:'1px solid var(--color-border)', paddingTop:10, marginTop:10 }}>
-                  <input className="form-input" style={{ fontSize:12, height:34 }} placeholder="Type note for staff..." value={newNoteText} onChange={e => setNewNoteText(e.target.value)} required disabled={notesLoading}/>
-                  <button type="submit" className="btn btn-primary btn-sm" style={{ height:34 }} disabled={notesLoading}>Send</button>
-                </form>
-              </>
-            );
-          })()}
+          <form onSubmit={handleAddInternalNote} style={{ display:'flex', gap:8, borderTop:'1px solid var(--color-border)', paddingTop:10, marginTop:10 }}>
+            <input className="form-input" style={{ fontSize:12, height:34 }} placeholder="Type note for staff..." value={newNoteText} onChange={e => setNewNoteText(e.target.value)} required disabled={notesLoading}/>
+            <button type="submit" className="btn btn-primary btn-sm" style={{ height:34 }} disabled={notesLoading}>Send</button>
+          </form>
         </div>
       </div>
 
@@ -538,69 +588,34 @@ function CaseExtensions({ detailModal, setDetailModal, loadAllData, user, showTo
           Create a future scheduled travel lead from this customer record for pipeline tracking.
         </p>
 
-        {(() => {
-          const [openForm, setOpenForm] = useState(false);
-          const [fDest, setFDest] = useState(data.country || '');
-          const [fDate, setFDate] = useState('');
-          const [fNotes, setFNotes] = useState(`Converted from travel file ${data.booking_ref || data.app_ref}.`);
-          const [saving, setSaving] = useState(false);
-
-          const handleSubmit = async (e) => {
-            e.preventDefault();
-            if (!fDate) return;
-            setSaving(true);
-            try {
-              await api.post('/business-suite/future-leads', {
-                name: data.customer_name || data.name,
-                email: data.customer_email || data.email,
-                phone: data.customer_phone || data.phone || '',
-                destination: fDest,
-                intended_travel_date: fDate,
-                notes: fNotes
-              });
-              showToast('Registered as future travel plan successfully!');
-              setOpenForm(false);
-              await loadAllData();
-            } catch (err) {
-              showToast(err.message, 'error');
-            } finally {
-              setSaving(false);
-            }
-          };
-
-          if (!openForm) {
-            return (
-              <button type="button" className="btn btn-outline btn-sm" onClick={() => setOpenForm(true)}>
-                Save as Future Travel Plan
-              </button>
-            );
-          }
-
-          return (
-            <form onSubmit={handleSubmit} style={{ display:'flex', flexDirection:'column', gap:10, background:'var(--color-bg)', padding:14, borderRadius:8, border:'1px solid var(--color-border)' }}>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-                <div className="form-group">
-                  <label className="form-label" style={{ fontSize:11 }}>Destination</label>
-                  <input className="form-input" style={{ fontSize:12, height:34 }} value={fDest} onChange={e => setFDest(e.target.value)} required/>
-                </div>
-                <div className="form-group">
-                  <label className="form-label" style={{ fontSize:11 }}>Intended Travel Date</label>
-                  <input type="date" className="form-input" style={{ fontSize:12, height:34 }} value={fDate} onChange={e => setFDate(e.target.value)} required/>
-                </div>
+        {!openForm ? (
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => setOpenForm(true)}>
+            Save as Future Travel Plan
+          </button>
+        ) : (
+          <form onSubmit={handleFutureLeadSubmit} style={{ display:'flex', flexDirection:'column', gap:10, background:'var(--color-bg)', padding:14, borderRadius:8, border:'1px solid var(--color-border)' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+              <div className="form-group">
+                <label className="form-label" style={{ fontSize:11 }}>Destination</label>
+                <input className="form-input" style={{ fontSize:12, height:34 }} value={fDest} onChange={e => setFDest(e.target.value)} required/>
               </div>
               <div className="form-group">
-                <label className="form-label" style={{ fontSize:11 }}>Timeline & Coordination Notes</label>
-                <textarea className="form-input" rows="2" style={{ fontSize:12 }} value={fNotes} onChange={e => setFNotes(e.target.value)}/>
+                <label className="form-label" style={{ fontSize:11 }}>Intended Travel Date</label>
+                <input type="date" className="form-input" style={{ fontSize:12, height:34 }} value={fDate} onChange={e => setFDate(e.target.value)} required/>
               </div>
-              <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
-                <button type="button" className="btn btn-ghost btn-xs" onClick={() => setOpenForm(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary btn-xs" disabled={saving}>
-                  {saving ? 'Saving...' : 'Register Future Plan'}
-                </button>
-              </div>
-            </form>
-          );
-        })()}
+            </div>
+            <div className="form-group">
+              <label className="form-label" style={{ fontSize:11 }}>Timeline & Coordination Notes</label>
+              <textarea className="form-input" rows="2" style={{ fontSize:12 }} value={fNotes} onChange={e => setFNotes(e.target.value)}/>
+            </div>
+            <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+              <button type="button" className="btn btn-ghost btn-xs" onClick={() => setOpenForm(false)}>Cancel</button>
+              <button type="submit" className="btn btn-primary btn-xs" disabled={saving}>
+                {saving ? 'Saving...' : 'Register Future Plan'}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );
@@ -677,6 +692,8 @@ export default function AdminPage() {
   const [campaigns, setCampaigns] = useState([]);
   const [newCampaign, setNewCampaign] = useState({ subject: '', body: '', target_role: 'subscribers' });
   const [submittingCampaign, setSubmittingCampaign] = useState(false);
+  const [campaignEditorTab, setCampaignEditorTab] = useState('write');
+  const [searchCampQuery, setSearchCampQuery] = useState('');
   const [futureLeads, setFutureLeads] = useState([]);
   const [internalNotes, setInternalNotes] = useState([]);
   const [internalNotesInput, setInternalNotesInput] = useState('');
@@ -697,6 +714,8 @@ export default function AdminPage() {
   const [editingBlog, setEditingBlog] = useState(null);
   const [msgInput, setMsgInput] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
+  const [uploadingChatFile, setUploadingChatFile] = useState(false);
+  const chatFileInputRef = useRef(null);
   const [toast, setToast] = useState(null);
   const msgEndRef = useRef(null);
 
@@ -907,6 +926,17 @@ export default function AdminPage() {
     }
   };
 
+  const handleDeleteCampaign = async (campaignId) => {
+    if (!confirm('Are you sure you want to delete this campaign? This action is irreversible.')) return;
+    try {
+      await api.delete(`/business-suite/campaigns/${campaignId}`);
+      showToast('Campaign deleted successfully');
+      await loadAllData(true);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
   const handleUpdateConsultation = async (id, status) => {
     try {
       await api.put(`/business-suite/consultations/${id}`, { status });
@@ -925,6 +955,33 @@ export default function AdminPage() {
     } catch (err) {
       showToast(err.message, 'error');
     }
+  };
+
+  const getPortalShareLink = (email) => {
+    const configUrl = businessSettings.website_url;
+    // Automatically match the local origin (localhost/127.0.0.1) when testing locally
+    const websiteUrl = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      ? window.location.origin
+      : (configUrl || window.location.origin);
+    return `${websiteUrl}/login?email=${encodeURIComponent(email)}`;
+  };
+
+  const handleCopyShareLink = (email) => {
+    const link = getPortalShareLink(email);
+    navigator.clipboard.writeText(link)
+      .then(() => showToast('Portal login link copied to clipboard!'))
+      .catch(() => showToast('Failed to copy link', 'error'));
+  };
+
+  const handleWhatsAppSharePortal = (name, email, phone) => {
+    const link = getPortalShareLink(email);
+    const message = encodeURIComponent(`Hi ${name || 'Traveler'}, here is the link to access your Borderless Trips client portal to track your visa application or booking: ${link}`);
+    const cleanPhone = (phone || '').replace(/[+\s()-]+/g, '');
+    if (!cleanPhone) {
+      showToast('Client has no phone number configured', 'error');
+      return;
+    }
+    window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
   };
 
   const fetchInternalNotes = async (ref) => {
@@ -1339,6 +1396,36 @@ export default function AdminPage() {
       const convData = await api.get('/messages'); setConversations(convData);
     } catch (err) { showToast(err.message, 'error'); }
     finally { setSendingMsg(false); }
+  };
+
+  const handleAttachFile = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !selectedConvo) return;
+    try {
+      setUploadingChatFile(true);
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const res = await api.post('/upload', formData);
+      
+      // Send message immediately with the uploaded attachment
+      await api.post('/messages', {
+        message: '',
+        attachment_url: res.url,
+        attachment_name: res.filename,
+        attachment_type: res.mimetype,
+        user_id: selectedConvo.user_id
+      });
+      
+      // Refresh messages
+      const msgs = await api.get(`/messages?user_id=${selectedConvo.user_id}`); setChatMessages(msgs);
+      const convData = await api.get('/messages'); setConversations(convData);
+    } catch (err) {
+      showToast('Failed to upload file: ' + err.message, 'error');
+    } finally {
+      setUploadingChatFile(false);
+      if (chatFileInputRef.current) chatFileInputRef.current.value = '';
+    }
   };
 
   if (!user || user.role !== 'admin') {
@@ -1930,11 +2017,19 @@ export default function AdminPage() {
                               <td><StatusBadge status={c.status || 'active'}/></td>
                               <td style={{ fontSize:12 }}>{new Date(c.created_at).toLocaleDateString()}</td>
                               <td>
-                                <button className="admin-action-btn info" onClick={() => {
-                                  setEditingCust(c);
-                                  setCustForm({ name:c.name||'', email:c.email||'', phone:c.phone||'', nationality:c.nationality||'', status:c.status||'active', password:'' });
-                                  setCustModal(true);
-                                }}><Edit2 size={12}/> Edit</button>
+                                <div style={{ display:'flex', gap:4 }}>
+                                  <button className="admin-action-btn info" onClick={() => {
+                                    setEditingCust(c);
+                                    setCustForm({ name:c.name||'', email:c.email||'', phone:c.phone||'', nationality:c.nationality||'', status:c.status||'active', password:'' });
+                                    setCustModal(true);
+                                  }}><Edit2 size={12}/> Edit</button>
+                                  <button className="admin-action-btn success" style={{ background:'rgba(16,185,129,0.06)', color:'#10b981', border:'1px solid rgba(16,185,129,0.1)' }} title="Copy Portal Login Link" onClick={() => handleCopyShareLink(c.email)}>
+                                    <ExternalLink size={12}/> Link
+                                  </button>
+                                  <button className="admin-action-btn" style={{ background:'rgba(37,211,102,0.06)', color:'#25d366', border:'1px solid rgba(37,211,102,0.1)' }} title="Invite via WhatsApp" onClick={() => handleWhatsAppSharePortal(c.name, c.email, c.phone)}>
+                                    💬 Invite
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))}
@@ -2234,6 +2329,14 @@ export default function AdminPage() {
                             <button className="admin-action-btn info" onClick={()=>setDetailModal({type:'inquiry',data:inq})}><Eye size={12}/> View</button>
                             {inq.status==='new' && <button className="admin-action-btn info" onClick={()=>handleUpdateInquiry(inq.id,{status:'replied'})}>Replied</button>}
                             {inq.status!=='closed' && <button className="admin-action-btn danger" onClick={()=>handleUpdateInquiry(inq.id,{status:'closed'})}>Close</button>}
+                            <button className="admin-action-btn success" style={{ background:'rgba(16,185,129,0.06)', color:'#10b981', border:'1px solid rgba(16,185,129,0.1)' }} title="Copy Portal Link" onClick={() => handleCopyShareLink(inq.email)}>
+                              Share Portal
+                            </button>
+                            {inq.phone && (
+                              <button className="admin-action-btn" style={{ background:'rgba(37,211,102,0.06)', color:'#25d366', border:'1px solid rgba(37,211,102,0.1)' }} title="Invite via WhatsApp" onClick={() => handleWhatsAppSharePortal(inq.name, inq.email, inq.phone)}>
+                                💬 WhatsApp
+                              </button>
+                            )}
                           </div>
                         </div>
                         <p style={{ marginTop:12, fontSize:13, color:'var(--color-text)', background:'var(--color-bg)', padding:'10px 14px', borderRadius:8, borderLeft:'3px solid var(--color-secondary)', lineHeight:1.6 }}>{inq.message}</p>
@@ -2352,6 +2455,8 @@ export default function AdminPage() {
                           <div style={{ flex:1, overflowY:'auto', padding:20, display:'flex', flexDirection:'column', gap:12, background:'var(--color-bg)' }}>
                             {chatMessages.map((msg,i) => {
                               const isSelf = msg.sender === 'admin'; // Agent/Admin sent it
+                              const hasAttachment = !!msg.attachment_url;
+                              const isImage = hasAttachment && msg.attachment_type && msg.attachment_type.toLowerCase().startsWith('image/');
                               return (
                                 <div key={i} style={{ display:'flex', justifyContent:isSelf?'flex-end':'flex-start', gap:8, alignItems:'flex-start' }}>
                                   {!isSelf && (
@@ -2368,7 +2473,30 @@ export default function AdminPage() {
                                     borderBottomRightRadius:isSelf?4:14,
                                     borderBottomLeftRadius:isSelf?14:4
                                   }}>
-                                    {msg.message}
+                                    {isImage && (
+                                      <div style={{ marginBottom: msg.message ? 8 : 0, overflow:'hidden', borderRadius:8 }}>
+                                        <a href={msg.attachment_url} target="_blank" rel="noopener noreferrer">
+                                          <img src={msg.attachment_url} alt={msg.attachment_name || "Uploaded Image"} style={{ maxWidth:'100%', maxHeight:200, display:'block', objectFit:'cover', borderRadius:6 }} />
+                                        </a>
+                                      </div>
+                                    )}
+                                    {hasAttachment && !isImage && (
+                                      <a href={msg.attachment_url} target="_blank" rel="noopener noreferrer" style={{
+                                        display:'flex', alignItems:'center', gap:10, textDecoration:'none',
+                                        padding:'8px 12px', background:isSelf?'rgba(255,255,255,0.1)':'var(--color-bg-alt)',
+                                        borderRadius:8, color:isSelf?'#ffffff':'var(--color-text)',
+                                        marginBottom: msg.message ? 8 : 0, border:isSelf?'1px solid rgba(255,255,255,0.15)':'1px solid var(--color-border)'
+                                      }}>
+                                        <div style={{ background:isSelf?'rgba(255,255,255,0.15)':'rgba(14,165,233,0.1)', color:isSelf?'#ffffff':'#0ea5e9', padding:6, borderRadius:6 }}>
+                                          <FileText size={18} />
+                                        </div>
+                                        <div style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, fontSize:12 }}>
+                                          <div style={{ fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{msg.attachment_name || 'Attachment'}</div>
+                                          <div style={{ fontSize:10, opacity:0.8 }}>Click to download</div>
+                                        </div>
+                                      </a>
+                                    )}
+                                    {msg.message && <div style={{ wordBreak:'break-word' }}>{msg.message}</div>}
                                     <div style={{ fontSize:10, opacity:0.6, marginTop:4, textAlign:'right' }}>
                                       {new Date(msg.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}
                                     </div>
@@ -2383,9 +2511,17 @@ export default function AdminPage() {
                             })}
                             <div ref={msgEndRef}/>
                           </div>
-                          <div style={{ display:'flex', gap:6, padding:'8px 12px', borderTop:'1px solid var(--color-border)' }}>
-                            <input className="form-input" placeholder="Type reply..." value={msgInput} onChange={e=>setMsgInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();handleSendReply();}}} style={{ flex:1, border:'none', background:'transparent', padding:'8px 12px' }}/>
-                            <button className="btn btn-primary btn-icon" onClick={handleSendReply} disabled={sendingMsg||!msgInput.trim()} style={{ width:38, height:38 }}><Send size={15}/></button>
+                          <div style={{ display:'flex', gap:6, padding:'8px 12px', borderTop:'1px solid var(--color-border)', alignItems:'center' }}>
+                            <input type="file" ref={chatFileInputRef} onChange={handleAttachFile} style={{ display:'none' }} />
+                            <button className="btn btn-outline btn-icon" onClick={() => chatFileInputRef.current?.click()} disabled={uploadingChatFile || sendingMsg} style={{ flexShrink:0, width:38, height:38, display:'flex', alignItems:'center', justifyContent:'center' }} title="Attach image or file">
+                              {uploadingChatFile ? (
+                                <div className="spinner-border" style={{ width:16, height:16, border:'2px solid var(--color-secondary)', borderTopColor:'transparent', borderRadius:'50%', animation:'spin 1s linear infinite' }} />
+                              ) : (
+                                <Paperclip size={15}/>
+                              )}
+                            </button>
+                            <input className="form-input" placeholder={uploadingChatFile ? "Uploading attachment..." : "Type reply..."} value={msgInput} onChange={e=>setMsgInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter' && !e.shiftKey){e.preventDefault();handleSendReply();}}} style={{ flex:1, border:'none', background:'transparent', padding:'8px 12px' }} disabled={uploadingChatFile}/>
+                            <button className="btn btn-primary btn-icon" onClick={handleSendReply} disabled={sendingMsg || uploadingChatFile || (!msgInput.trim())} style={{ width:38, height:38 }}><Send size={15}/></button>
                           </div>
                         </>) : (
                           <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', color:'var(--color-text-muted)' }}>
@@ -2846,7 +2982,7 @@ export default function AdminPage() {
                     <div className="card" style={{ padding:24 }}>
                       <h3 style={{ fontSize:15, fontWeight:700, marginBottom:16 }}>Business Information</h3>
                       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
-                        {[['business_name','Business Name'],['phone','Phone'],['email','Email'],['whatsapp','WhatsApp'],['address','Address'],['currency','Currency']].map(([key,label]) => (
+                        {[['business_name','Business Name'],['phone','Phone'],['email','Email'],['whatsapp','WhatsApp'],['address','Address'],['currency','Currency'],['website_url','Website URL (e.g. https://yourdomain.com)']].map(([key,label]) => (
                           <div key={key} className="form-group"><label className="form-label">{label}</label><input className="form-input" value={businessSettings[key]||''} onChange={e=>setBusinessSettings({...businessSettings,[key]:e.target.value})}/></div>
                         ))}
                       </div>
@@ -3206,87 +3342,217 @@ export default function AdminPage() {
                             </tr>
                           )}
                         </tbody>
-                      </table>
+                        </table>
+                      </div>
                     </div>
-                  </div>
                 )}
 
                 {/* ===== MARKETING CAMPAIGNS ===== */}
-                {activeTab === 'campaigns' && (
-                  <div>
-                    <h1 className="heading-2" style={{ marginBottom:24 }}>Email Marketing Campaigns</h1>
-                    
-                    <div style={{ display:'grid', gridTemplateColumns:'1.2fr 1.8fr', gap:24 }}>
-                      <div className="card" style={{ padding:24, height:'fit-content' }}>
-                        <h3 style={{ fontSize:15, fontWeight:700, marginBottom:16 }}>Create Email Campaign</h3>
-                        <form onSubmit={handleCreateCampaign} style={{ display:'flex', flexDirection:'column', gap:14 }}>
-                          <div className="form-group">
-                            <label className="form-label">Subject Line</label>
-                            <input className="form-input" placeholder="e.g. Exclusive Schengen Holiday Packages 2026!" value={newCampaign.subject} onChange={e => setNewCampaign({ ...newCampaign, subject: e.target.value })} required/>
-                          </div>
-                          <div className="form-group">
-                            <label className="form-label">Target Audience</label>
-                            <select className="form-input" value={newCampaign.target_role} onChange={e => setNewCampaign({ ...newCampaign, target_role: e.target.value })}>
-                              <option value="subscribers">Newsletter Subscribers Only</option>
-                              <option value="customers">Registered Portal Customers Only</option>
-                              <option value="all">Everyone (Subscribers + Customers)</option>
-                            </select>
-                          </div>
-                          <div className="form-group">
-                            <label className="form-label">Campaign Message Body</label>
-                            <textarea className="form-input" rows="8" placeholder="Write HTML or plain text campaign details..." value={newCampaign.body} onChange={e => setNewCampaign({ ...newCampaign, body: e.target.value })} required/>
-                          </div>
-                          <button type="submit" className="btn btn-primary" disabled={submittingCampaign}>
-                            {submittingCampaign ? 'Saving...' : 'Save Draft Campaign'}
-                          </button>
-                        </form>
-                      </div>
+                {activeTab === 'campaigns' && (() => {
+                  const campaignPresets = {
+                    announcement: {
+                      subject: "📢 Important Updates from Borderless Trips!",
+                      body: `<h3>Hello Traveler,</h3>\n<p>We are thrilled to announce that we have upgraded our travel platform to provide an even smoother journey for your Schengen and global applications.</p>\n<div style="background-color:#f1f5f9; border-left:4px solid #d4a574; padding:16px; margin:20px 0; border-radius:4px;">\n  <strong>💡 What's New?</strong>\n  <p style="margin:6px 0 0 0; color:#475569; font-size:13px;">✓ Real-time Application Status Timeline Tracker<br/>✓ Secure Digital Document E-Signing Modal<br/>✓ Client Loyalty Rewards & Referral Points tracking</p>\n</div>\n<p>Access your updated travel profile and view new premium packages by clicking the button below.</p>\n<div style="text-align:center; margin:24px 0;">\n  <a href="https://palegreen-bison-521258.hostingersite.com/login" style="display:inline-block; background-color:#0b1d35; color:#ffffff; padding:12px 24px; border-radius:30px; font-weight:600; text-decoration:none; font-size:14px; box-shadow:0 4px 10px rgba(11,29,53,0.25);">Go to Portal</a>\n</div>`
+                    },
+                    promo: {
+                      subject: "✈️ Exclusive Schengen Promo: 10% Off Visa Support Services!",
+                      body: `<div style="text-align:center;">\n  <h3 style="color:#d4a574; margin-top:0;">Celebrate Travel with Our Exclusive Offer!</h3>\n  <p>Planning your next holiday? For the next 7 days, get 10% off our premium Schengen visa preparation and appointment support package.</p>\n  <div style="background:linear-gradient(135deg, #d4a574 0%, #b28354 100%); padding:20px; border-radius:12px; display:inline-block; margin:16px 0; color:#ffffff;">\n    <span style="font-size:11px; text-transform:uppercase; letter-spacing:1px; display:block;">Use Promo Code</span>\n    <strong style="font-size:24px; font-family:monospace; letter-spacing:2px; display:block; margin:4px 0;">EXPLORE10</strong>\n    <span style="font-size:10px; opacity:0.9;">10% Off All Schengen Package Bookings • Valid for 7 Days</span>\n  </div>\n  <p>Apply this coupon code in your client portal dashboard when creating a new request, or contact your assigned agent.</p>\n</div>`
+                    },
+                    deal: {
+                      subject: "🔥 Hot Deal: 12-Day Schengen Express Tour & Flight Reservation!",
+                      body: `<h3>Ready for an Unforgettable Adventure?</h3>\n<p>We are highlighting our top-rated European package of the month with guaranteed visa slot queue booking included:</p>\n<div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:16px; margin:20px 0;">\n  <h4 style="color:#0b1d35; margin:0 0 6px 0;">Schengen Express Tour (Paris • Rome • Berlin)</h4>\n  <p style="margin:0 0 10px 0; font-size:12px; color:#64748b;">Includes 4-Star Accommodations • Daily Breakfasts • Visa Consultation & Filings</p>\n  <ul style="margin:0; padding-left:20px; font-size:13px; line-height:1.5; color:#334155;">\n    <li>Complete flight itinerary reservation documents</li>\n    <li>Official VFS/TLS booking slots coordination</li>\n    <li>Comprehensive travel insurance voucher cards</li>\n  </ul>\n</div>\n<p>Claim your slot now before bookings close for this quarter.</p>\n<div style="text-align:center; margin:24px 0;">\n  <a href="https://palegreen-bison-521258.hostingersite.com/holiday-packages" style="display:inline-block; background-color:#d4a574; color:#ffffff; padding:12px 24px; border-radius:30px; font-weight:600; text-decoration:none; font-size:14px; box-shadow:0 4px 10px rgba(212,165,116,0.35);">View Package Details</a>\n</div>`
+                    }
+                  };
 
-                      <div>
-                        <h3 className="heading-4" style={{ marginBottom:12 }}>Campaign Lists</h3>
-                        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-                          {campaigns.map((camp, idx) => (
-                            <div key={idx} className="card" style={{ padding:20 }}>
-                              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-                                <div>
-                                  <h4 style={{ fontWeight:700, fontSize:15 }}>{camp.subject}</h4>
-                                  <p className="text-muted" style={{ fontSize:11, marginTop:4 }}>
-                                    Audience: <strong style={{ textTransform:'capitalize' }}>{camp.target_role}</strong>
-                                  </p>
-                                </div>
-                                <span className="status-pill" style={{
-                                  background: camp.status === 'draft' ? 'var(--color-border)' : 'rgba(16,185,129,0.1)',
-                                  color: camp.status === 'draft' ? 'var(--color-text-muted)' : '#10b981',
-                                  padding:'3px 8px', borderRadius:10, fontSize:11, fontWeight:700
-                                }}>
-                                  {camp.status}
-                                </span>
-                              </div>
-                              <p className="text-muted" style={{ fontSize:12, marginTop:10, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>
-                                {camp.body}
-                              </p>
-                              <div style={{ display:'flex', gap:10, marginTop:14, justifyContent:'space-between', alignItems:'center', borderTop:'1px solid var(--color-border)', paddingTop:12 }}>
-                                <span style={{ fontSize:10, color:'var(--color-text-muted)' }}>
-                                  Created: {new Date(camp.created_at).toLocaleDateString()}
-                                </span>
-                                {camp.status === 'draft' && (
-                                  <button className="btn btn-primary btn-xs" onClick={() => handleSendCampaign(camp.id)}>
-                                    Send Email Blast
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                          {campaigns.length === 0 && (
-                            <div className="card" style={{ padding:40, textAlign:'center', color:'var(--color-text-muted)' }}>
-                              No campaigns created yet.
-                            </div>
-                          )}
+                  const emailTemplateWrapper = (subjectText, bodyContent) => `
+                    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background-color:#f8fafc; color:#1e293b; padding:16px; border-radius:8px; max-width:600px; margin:0 auto; border:1px solid #e2e8f0;">
+                      <div style="background:linear-gradient(135deg, #0b1d35 0%, #1e3a5f 100%); padding:20px; text-align:center; border-bottom:3px solid #d4a574; border-radius:8px 8px 0 0;">
+                        <h1 style="font-size:20px; font-weight:800; color:#ffffff; margin:0; letter-spacing:0.5px;">BORDERLESS<span style="color:#d4a574">TRIPS</span></h1>
+                      </div>
+                      <div style="padding:20px; background-color:#ffffff; line-height:1.6; font-size:14px; color:#334155; min-height:150px;">
+                        ${bodyContent ? bodyContent.replace(/\n/g, '<br/>') : '<p style="color:#94a3b8; font-style:italic;">Message body content will appear here...</p>'}
+                      </div>
+                      <div style="background-color:#f1f5f9; padding:16px; text-align:center; border-radius:0 0 8px 8px; border-top:1px solid #e2e8f0; font-size:11px; color:#64748b;">
+                        <p style="margin:0 0 6px 0;">© ${new Date().getFullYear()} Borderless Trips. All rights reserved.</p>
+                        <div style="margin-top:4px;">
+                          <a href="#" style="color:#d4a574; text-decoration:none; margin:0 6px;">Terms</a>
+                          <a href="#" style="color:#d4a574; text-decoration:none; margin:0 6px;">Privacy</a>
+                          <a href="#" style="color:#d4a574; text-decoration:none; margin:0 6px;">Unsubscribe</a>
                         </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  `;
+
+                  // Simple local filter for campaigns list
+                  const filteredCampaigns = campaigns.filter(c => 
+                    c.subject.toLowerCase().includes(searchCampQuery.toLowerCase()) || 
+                    c.body.toLowerCase().includes(searchCampQuery.toLowerCase())
+                  );
+
+                  return (
+                    <div>
+                      {/* STATS STRIP */}
+                      <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:16, marginBottom:24 }}>
+                        <div className="card" style={{ padding:16, display:'flex', alignItems:'center', gap:14 }}>
+                          <div style={{ background:'rgba(212,165,116,0.1)', color:'var(--color-secondary)', padding:12, borderRadius:10 }}><Users size={22}/></div>
+                          <div>
+                            <span style={{ fontSize:11, color:'var(--color-text-muted)', display:'block', fontWeight:600 }}>SUBSCRIBERS</span>
+                            <strong style={{ fontSize:18, color:'var(--color-text)' }}>{subscribers.length}</strong>
+                          </div>
+                        </div>
+                        <div className="card" style={{ padding:16, display:'flex', alignItems:'center', gap:14 }}>
+                          <div style={{ background:'rgba(14,165,233,0.1)', color:'#0ea5e9', padding:12, borderRadius:10 }}><Users size={22}/></div>
+                          <div>
+                            <span style={{ fontSize:11, color:'var(--color-text-muted)', display:'block', fontWeight:600 }}>PORTAL CUSTOMERS</span>
+                            <strong style={{ fontSize:18, color:'var(--color-text)' }}>{customers.length}</strong>
+                          </div>
+                        </div>
+                        <div className="card" style={{ padding:16, display:'flex', alignItems:'center', gap:14 }}>
+                          <div style={{ background:'rgba(245,158,11,0.1)', color:'#f59e0b', padding:12, borderRadius:10 }}><Clock size={22}/></div>
+                          <div>
+                            <span style={{ fontSize:11, color:'var(--color-text-muted)', display:'block', fontWeight:600 }}>ACTIVE DRAFTS</span>
+                            <strong style={{ fontSize:18, color:'var(--color-text)' }}>{campaigns.filter(c=>c.status==='draft').length}</strong>
+                          </div>
+                        </div>
+                        <div className="card" style={{ padding:16, display:'flex', alignItems:'center', gap:14 }}>
+                          <div style={{ background:'rgba(16,185,129,0.1)', color:'#10b981', padding:12, borderRadius:10 }}><CheckCircle2 size={22}/></div>
+                          <div>
+                            <span style={{ fontSize:11, color:'var(--color-text-muted)', display:'block', fontWeight:600 }}>CAMPAIGNS SENT</span>
+                            <strong style={{ fontSize:18, color:'var(--color-text)' }}>{campaigns.filter(c=>c.status==='sent').length}</strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      <h1 className="heading-2" style={{ marginBottom:20 }}>Email Marketing Campaigns</h1>
+
+                      <div style={{ display:'grid', gridTemplateColumns:'1.2fr 1.8fr', gap:24 }}>
+                        {/* COMPOSER CARD */}
+                        <div className="card" style={{ padding:24, height:'fit-content' }}>
+                          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+                            <h3 style={{ fontSize:15, fontWeight:700 }}>Compose Campaign</h3>
+                            <div style={{ display:'flex', gap:6 }}>
+                              <button className={`btn btn-xs ${campaignEditorTab === 'write' ? 'btn-primary' : 'btn-outline'}`} onClick={()=>setCampaignEditorTab('write')}>
+                                Edit Content
+                              </button>
+                              <button className={`btn btn-xs ${campaignEditorTab === 'preview' ? 'btn-primary' : 'btn-outline'}`} onClick={()=>setCampaignEditorTab('preview')}>
+                                Visual Preview
+                              </button>
+                            </div>
+                          </div>
+
+                          {campaignEditorTab === 'write' ? (
+                            <form onSubmit={handleCreateCampaign} style={{ display:'flex', flexDirection:'column', gap:14 }}>
+                              {/* PRESETS LOADER */}
+                              <div>
+                                <label className="form-label" style={{ marginBottom:6, display:'block' }}>Load Pre-designed Template</label>
+                                <div style={{ display:'flex', gap:8 }}>
+                                  <button type="button" className="btn btn-outline btn-xs" style={{ flex:1 }}
+                                    onClick={() => setNewCampaign({ ...newCampaign, subject: campaignPresets.announcement.subject, body: campaignPresets.announcement.body })}>
+                                    📢 Announcement
+                                  </button>
+                                  <button type="button" className="btn btn-outline btn-xs" style={{ flex:1 }}
+                                    onClick={() => setNewCampaign({ ...newCampaign, subject: campaignPresets.promo.subject, body: campaignPresets.promo.body })}>
+                                    🎟️ Discount Promo
+                                  </button>
+                                  <button type="button" className="btn btn-outline btn-xs" style={{ flex:1 }}
+                                    onClick={() => setNewCampaign({ ...newCampaign, subject: campaignPresets.deal.subject, body: campaignPresets.deal.body })}>
+                                    🔥 Travel Deal
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="form-group">
+                                <label className="form-label">Subject Line</label>
+                                <input className="form-input" placeholder="e.g. Exclusive Schengen Holiday Packages 2026!" value={newCampaign.subject} onChange={e => setNewCampaign({ ...newCampaign, subject: e.target.value })} required/>
+                              </div>
+
+                              <div className="form-group">
+                                <label className="form-label">Target Audience</label>
+                                <select className="form-input" value={newCampaign.target_role} onChange={e => setNewCampaign({ ...newCampaign, target_role: e.target.value })}>
+                                  <option value="subscribers">Newsletter Subscribers Only ({subscribers.length} recipients)</option>
+                                  <option value="customers">Registered Portal Customers Only ({customers.length} recipients)</option>
+                                  <option value="all">Everyone ({subscribers.length + customers.length} unique recipients)</option>
+                                </select>
+                              </div>
+
+                              <div className="form-group">
+                                <label className="form-label">Campaign Message Body (HTML supported)</label>
+                                <textarea className="form-input" rows="10" placeholder="Write HTML or plain text campaign details..." value={newCampaign.body} onChange={e => setNewCampaign({ ...newCampaign, body: e.target.value })} required style={{ fontFamily:'monospace', fontSize:13 }}/>
+                              </div>
+
+                              <button type="submit" className="btn btn-primary" disabled={submittingCampaign}>
+                                {submittingCampaign ? 'Saving...' : 'Save Draft Campaign'}
+                              </button>
+                            </form>
+                          ) : (
+                            <div style={{ background:'var(--color-bg-alt)', padding:12, borderRadius:8, border:'1px solid var(--color-border)' }}>
+                              <div style={{ marginBottom:12, paddingBottom:8, borderBottom:'1px solid var(--color-border)', fontSize:12 }}>
+                                <strong style={{ color:'var(--color-text-muted)' }}>Subject:</strong> {newCampaign.subject || '(No Subject Line)'}
+                              </div>
+                              <div dangerouslySetInnerHTML={{ __html: emailTemplateWrapper(newCampaign.subject, newCampaign.body) }} style={{ overflowY:'auto', maxHeight:450 }} />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* CAMPAIGN LISTS */}
+                        <div>
+                          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+                            <h3 className="heading-4">Campaign Lists</h3>
+                            <div style={{ position:'relative', width:200 }}>
+                              <Search size={14} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--color-text-muted)' }}/>
+                              <input className="form-input" placeholder="Search campaigns..." value={searchCampQuery} onChange={e=>setSearchCampQuery(e.target.value)} style={{ paddingLeft:30, height:30, fontSize:12 }}/>
+                            </div>
+                          </div>
+
+                          <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                            {filteredCampaigns.map((camp, idx) => (
+                              <div key={idx} className="card" style={{ padding:20, position:'relative' }}>
+                                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                                  <div style={{ paddingRight:40 }}>
+                                    <h4 style={{ fontWeight:700, fontSize:15, color:'var(--color-text)' }}>{camp.subject}</h4>
+                                    <p className="text-muted" style={{ fontSize:11, marginTop:4, display:'flex', gap:10 }}>
+                                      <span>Audience: <strong style={{ textTransform:'capitalize', color:'var(--color-secondary)' }}>{camp.target_role}</strong></span>
+                                      <span>•</span>
+                                      <span>Created: {new Date(camp.created_at).toLocaleDateString()}</span>
+                                    </p>
+                                  </div>
+                                  <span className="status-pill" style={{
+                                    background: camp.status === 'draft' ? 'var(--color-border)' : 'rgba(16,185,129,0.1)',
+                                    color: camp.status === 'draft' ? 'var(--color-text-muted)' : '#10b981',
+                                    padding:'3px 8px', borderRadius:10, fontSize:10, fontWeight:700, textTransform:'uppercase'
+                                  }}>
+                                    {camp.status}
+                                  </span>
+                                </div>
+
+                                <p className="text-muted" style={{ fontSize:12, marginTop:10, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden', background:'rgba(255,255,255,0.01)', padding:8, borderRadius:6, border:'1px solid var(--color-border)' }}>
+                                  {camp.body.replace(/<[^>]*>/g, '')}
+                                </p>
+
+                                <div style={{ display:'flex', gap:10, marginTop:14, justifyContent:'flex-end', alignItems:'center', borderTop:'1px solid var(--color-border)', paddingTop:12 }}>
+                                  <button className="btn btn-outline btn-xs" style={{ borderColor:'rgba(239,68,68,0.2)', color:'var(--color-danger)' }} onClick={() => handleDeleteCampaign(camp.id)}>
+                                    <Trash2 size={12}/> Delete
+                                  </button>
+                                  {camp.status === 'draft' && (
+                                    <button className="btn btn-primary btn-xs" onClick={() => handleSendCampaign(camp.id)} style={{ display:'flex', alignItems:'center', gap:4 }}>
+                                      <Send size={12}/> Send Email Blast
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+
+                            {filteredCampaigns.length === 0 && (
+                              <div className="card" style={{ padding:40, textAlign:'center', color:'var(--color-text-muted)' }}>
+                                No campaigns found matching "{searchCampQuery}".
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* ===== FUTURE LEADS TRACKER ===== */}
                 {activeTab === 'future-leads' && (() => {
@@ -4051,6 +4317,25 @@ export default function AdminPage() {
                       <option key={s.id} value={s.id}>{s.name} ({s.email})</option>
                     ))}
                   </select>
+                </div>
+              )}
+
+              {detailModal.data.email && (
+                <div style={{ marginTop: 16, background: 'rgba(255,255,255,0.02)', padding: 12, borderRadius: 8, border: '1px solid var(--color-border)' }}>
+                  <label className="form-label" style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, margin: 0, fontSize: 12 }}>
+                    🔑 Portal Access Link
+                  </label>
+                  <p className="text-muted" style={{ fontSize: 11, margin: '4px 0 10px' }}>
+                    Share the portal access link with this client to track progress.
+                  </p>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn btn-outline btn-xs" style={{ flex: 1, height: 30, fontSize: 11, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }} onClick={() => handleCopyShareLink(detailModal.data.email)}>
+                      <ExternalLink size={12} /> Copy Link
+                    </button>
+                    <button className="btn btn-xs" style={{ flex: 1, height: 30, fontSize: 11, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4, background: 'rgba(37,211,102,0.1)', color: '#25d366', border: '1px solid rgba(37,211,102,0.2)' }} onClick={() => handleWhatsAppSharePortal(detailModal.data.customer_name || detailModal.data.name || 'Traveler', detailModal.data.email, detailModal.data.customer_phone || detailModal.data.phone)}>
+                      💬 WhatsApp
+                    </button>
+                  </div>
                 </div>
               )}
 

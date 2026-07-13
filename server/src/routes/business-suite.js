@@ -399,6 +399,18 @@ router.post('/campaigns/:id/send', authenticate, adminOnly, async (req, res) => 
   }
 });
 
+router.delete('/campaigns/:id', authenticate, adminOnly, async (req, res) => {
+  try {
+    const result = await db.prepare('DELETE FROM campaigns WHERE id = ?').run(req.params.id);
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Campaign not found.' });
+    }
+    res.json({ message: 'Campaign deleted successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ----------------------------------------------------
 // 6. Internal Notes (Team Chat) API
 // ----------------------------------------------------

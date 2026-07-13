@@ -7,9 +7,11 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../utils/api';
+import { useSettings } from '../../context/SettingsContext';
 
 export default function VisaQuiz({ inline = false, onClose = null }) {
   const { user, loginWithToken } = useAuth();
+  const { settings } = useSettings();
   
   const [step, setStep] = useState(1);
   const [countries, setCountries] = useState([]);
@@ -248,7 +250,7 @@ export default function VisaQuiz({ inline = false, onClose = null }) {
   };
 
   const getWhatsAppUrl = () => {
-    const waPhone = '441234567890';
+    const waPhone = (settings.whatsapp || '441234567890').replace(/[+\s]+/g, '');
     const message = `Hello! My name is ${formData.name}. I just completed my Schengen Visa eligibility assessment for ${formData.country} and scored ${result?.score}%. I would like to consult with an agent to proceed with my visa file preparation.`;
     return `https://wa.me/${waPhone}?text=${encodeURIComponent(message)}`;
   };

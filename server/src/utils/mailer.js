@@ -2,21 +2,21 @@ const nodemailer = require('nodemailer');
 const db = require('../models/database');
 
 // Helper to load settings from DB in real time
-async function getSMTPSettings() {
+async function getSystemSettings() {
   try {
-    const rows = await db.prepare("SELECT key, value FROM settings WHERE key LIKE 'smtp_%'").all();
+    const rows = await db.prepare("SELECT key, value FROM settings").all();
     const settings = {};
     rows.forEach(r => { settings[r.key] = r.value; });
     return settings;
   } catch (e) {
-    console.error('Failed to read SMTP settings from database:', e);
+    console.error('Failed to read settings from database:', e);
     return {};
   }
 }
 
 // Build nodemailer transporter dynamically using DB settings
 async function getTransporter() {
-  const settings = await getSMTPSettings();
+  const settings = await getSystemSettings();
   const host = settings.smtp_host || process.env.SMTP_HOST;
   const port = parseInt(settings.smtp_port || process.env.SMTP_PORT || '587');
   const user = settings.smtp_user || process.env.SMTP_USER;
@@ -39,7 +39,16 @@ async function getTransporter() {
 }
 
 // HTML wrapper for emails
-function getEmailTemplate(title, preheader, contentHtml) {
+function getEmailTemplate(title, preheader, contentHtml, settings = {}) {
+  const businessName = settings.business_name || 'Borderless Trips';
+  const address = settings.address || 'London, United Kingdom';
+  const logoUrl = settings.logo_url 
+    ? (settings.logo_url.startsWith('http') ? settings.logo_url : `https://palegreen-bison-521258.hostingersite.com${settings.logo_url}`) 
+    : 'https://palegreen-bison-521258.hostingersite.com/logo.svg';
+  const websiteUrl = settings.website_url || 'https://palegreen-bison-521258.hostingersite.com';
+  const phone = settings.phone || '';
+  const email = settings.email || '';
+
   return `
     <!DOCTYPE html>
     <html>
@@ -73,18 +82,19 @@ function getEmailTemplate(title, preheader, contentHtml) {
       <div class="wrapper">
         <div class="container">
           <div class="header">
-            <h1 class="logo-text">BORDERLESS<span class="logo-accent">TRIPS</span></h1>
+            <h1 class="logo-text">${businessName.toUpperCase()}</h1>
           </div>
           <div class="content">
             ${contentHtml}
           </div>
           <div class="footer">
-            <p class="footer-text">© ${new Date().getFullYear()} Borderless Trips. All rights reserved.</p>
-            <p class="footer-text">London, United Kingdom</p>
+            <p class="footer-text">© ${new Date().getFullYear()} ${businessName}. All rights reserved.</p>
+            <p class="footer-text">${address}</p>
+            ${phone || email ? `<p class="footer-text" style="font-size:11px; margin-top:4px;">${phone ? `Tel: ${phone}` : ''} ${phone && email ? '|' : ''} ${email ? `Email: ${email}` : ''}</p>` : ''}
             <div class="footer-links">
-              <a href="https://palegreen-bison-521258.hostingersite.com/terms-of-service">Terms</a>
-              <a href="https://palegreen-bison-521258.hostingersite.com/privacy-policy">Privacy</a>
-              <a href="https://palegreen-bison-521258.hostingersite.com/refund-policy">Refunds</a>
+              <a href="${websiteUrl}/terms-of-service">Terms</a>
+              <a href="${websiteUrl}/privacy-policy">Privacy</a>
+              <a href="${websiteUrl}/refund-policy">Refunds</a>
             </div>
           </div>
         </div>
@@ -96,8 +106,51 @@ function getEmailTemplate(title, preheader, contentHtml) {
 
 // Core send mail wrapper
 async function sendMail({ to, subject, html, text }) {
-  const settings = await getSMTPSettings();
+  const settings = await getSystemSettings();
   const from = settings.smtp_from || process.env.SMTP_FROM || 'info@borderlesstrips.com';
+  const pass = settings.smtp_pass || process.env.SMTP_PASS;
+
+  // Use Brevo HTTP API if the password is a Brevo API key (starts with 'xkeysib-')
+  if (pass && pass.startsWith('xkeysib-')) {
+    try {
+      let senderName = settings.business_name || 'Borderless Trip';
+      let senderEmail = 'lastlook.pk@gmail.com';
+      const match = from.match(/([^<]+)<([^>]+)>/);
+      if (match) {
+        senderName = match[1].trim();
+        senderEmail = match[2].trim();
+      } else {
+        senderEmail = from.trim();
+      }
+
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': pass,
+          'content-type': 'application/json',
+          'accept': 'application/json'
+        },
+        body: JSON.stringify({
+          sender: { name: senderName, email: senderEmail },
+          to: [{ email: to }],
+          subject,
+          htmlContent: html,
+          textContent: text || ''
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || JSON.stringify(data));
+      }
+
+      console.log(`✉️ Email successfully sent via Brevo HTTP API to ${to} (ID: ${data.messageId})`);
+      return { messageId: data.messageId };
+    } catch (apiError) {
+      console.error(`❌ Failed to send email via Brevo HTTP API to ${to}:`, apiError);
+      throw apiError;
+    }
+  }
 
   const transporter = await getTransporter();
   if (!transporter) {
@@ -129,10 +182,12 @@ async function sendMail({ to, subject, html, text }) {
 
 // 1. Welcome Email with credentials
 async function sendWelcomeEmail({ email, name, tempPassword }) {
-  const loginUrl = 'https://palegreen-bison-521258.hostingersite.com/login';
+  const settings = await getSystemSettings();
+  const websiteUrl = settings.website_url || 'https://palegreen-bison-521258.hostingersite.com';
+  const loginUrl = `${websiteUrl}/login`;
   
   const content = `
-    <h2 class="h1">Welcome to Borderless Trips, ${name}!</h2>
+    <h2 class="h1">Welcome to ${settings.business_name || 'Borderless Trips'}, ${name}!</h2>
     <p class="p">Thank you for registering with us. An official client portal account has been prepared for you. You can log in at any time to monitor your visa application, update travelers list, or download travel documents.</p>
     
     <div class="card">
@@ -156,15 +211,18 @@ async function sendWelcomeEmail({ email, name, tempPassword }) {
 
   return sendMail({
     to: email,
-    subject: 'Welcome to Borderless Trips - Your Client Account is Ready',
-    html: getEmailTemplate('Welcome to Borderless Trips', 'Your client account details', content),
-    text: `Welcome to Borderless Trips!\n\nAn account has been created for you.\nEmail: ${email}\nPassword: ${tempPassword}\n\nLog in at: ${loginUrl}`
+    subject: `Welcome to ${settings.business_name || 'Borderless Trips'} - Your Client Account is Ready`,
+    html: getEmailTemplate(`Welcome to ${settings.business_name || 'Borderless Trips'}`, 'Your client account details', content, settings),
+    text: `Welcome to ${settings.business_name || 'Borderless Trips'}!\n\nAn account has been created for you.\nEmail: ${email}\nPassword: ${tempPassword}\n\nLog in at: ${loginUrl}`
   });
 }
 
 // 2. Service Request Confirmation
 async function sendRequestConfirmation({ email, name, ref, serviceType, country }) {
-  const portalUrl = 'https://palegreen-bison-521258.hostingersite.com/login';
+  const settings = await getSystemSettings();
+  const websiteUrl = settings.website_url || 'https://palegreen-bison-521258.hostingersite.com';
+  const portalUrl = `${websiteUrl}/login`;
+  
   const typeLabels = {
     visa: 'Visa Application Review',
     holiday_package: 'Holiday Package Booking',
@@ -209,14 +267,16 @@ async function sendRequestConfirmation({ email, name, ref, serviceType, country 
   return sendMail({
     to: email,
     subject: `Confirming Service Request - Ref: ${ref}`,
-    html: getEmailTemplate('Request Confirmed', 'Service request received', content),
+    html: getEmailTemplate('Request Confirmed', 'Service request received', content, settings),
     text: `Hello ${name},\n\nWe have received your request for: ${label} (${country}).\nReference Number: ${ref}\n\nTrack progress on your portal: ${portalUrl}`
   });
 }
 
 // 3. Application Process Status Update (Visa/Bookings/Requests)
 async function sendStatusUpdateEmail({ email, name, type, ref, oldStatus, newStatus, notes }) {
-  const portalUrl = 'https://palegreen-bison-521258.hostingersite.com/login';
+  const settings = await getSystemSettings();
+  const websiteUrl = settings.website_url || 'https://palegreen-bison-521258.hostingersite.com';
+  const portalUrl = `${websiteUrl}/login`;
   
   const statusLabels = {
     new: 'New / Received',
@@ -283,7 +343,7 @@ async function sendStatusUpdateEmail({ email, name, type, ref, oldStatus, newSta
   return sendMail({
     to: email,
     subject: `Update on your ${typeLabel} - Ref: ${ref}`,
-    html: getEmailTemplate('Status Update', 'Your travel file status has been updated', content),
+    html: getEmailTemplate('Status Update', 'Your travel file status has been updated', content, settings),
     text: `Hello ${name},\n\nThe status of your ${typeLabel} (${ref}) has been updated from ${oldLabel} to ${newLabel}.\n\nLog in to portal: ${portalUrl}`
   });
 }
@@ -291,8 +351,9 @@ async function sendStatusUpdateEmail({ email, name, type, ref, oldStatus, newSta
 // 4. Admin Alert for New Service Requests
 async function sendAdminAlert({ ref, name, email, serviceType, country }) {
   // Load admin email from settings (or environment variable as fallback)
-  const settings = getSMTPSettings();
+  const settings = await getSystemSettings();
   const to = settings.smtp_alert_recipient || process.env.ADMIN_ALERT_EMAIL || settings.email || 'info@borderlesstrips.com';
+  const websiteUrl = settings.website_url || 'https://palegreen-bison-521258.hostingersite.com';
 
   const typeLabels = {
     visa: 'Visa Application Review',
@@ -335,15 +396,15 @@ async function sendAdminAlert({ ref, name, email, serviceType, country }) {
     <p class="p">Please sign in to the Admin Panel dashboard to assign coordinators, accept/reject, or convert this file.</p>
 
     <div class="button-container">
-      <a href="https://palegreen-bison-521258.hostingersite.com/admin" class="button" style="background-color:#0b1d35;">Go to Admin Panel</a>
+      <a href="${websiteUrl}/admin" class="button" style="background-color:#0b1d35;">Go to Admin Panel</a>
     </div>
   `;
 
   return sendMail({
     to,
     subject: `🚨 [Admin Alert] New Request (${label}) - Ref: ${ref}`,
-    html: getEmailTemplate('Admin Alert', 'New client service request received', content),
-    text: `New service request submitted!\n\nRef: ${ref}\nClient: ${name} (${email})\nService: ${label}\n\nGo to Admin Panel: https://palegreen-bison-521258.hostingersite.com/admin`
+    html: getEmailTemplate('Admin Alert', 'New client service request received', content, settings),
+    text: `New service request submitted!\n\nRef: ${ref}\nClient: ${name} (${email})\nService: ${label}\n\nGo to Admin Panel: ${websiteUrl}/admin`
   });
 }
 

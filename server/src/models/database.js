@@ -33,6 +33,11 @@ pool.connect(async (err, client, release) => {
     // Auto-migrate schema updates (e.g. adding missing 'ref' column to notifications)
     try {
       await client.query("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS ref TEXT DEFAULT ''");
+      await client.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_url TEXT DEFAULT NULL");
+      await client.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_name TEXT DEFAULT NULL");
+      await client.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_type TEXT DEFAULT NULL");
+      await client.query("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_requested INTEGER DEFAULT 0");
+      await client.query("ALTER TABLE visa_applications ADD COLUMN IF NOT EXISTS payment_requested INTEGER DEFAULT 0");
       await client.query(`
         CREATE TABLE IF NOT EXISTS media_files (
           id SERIAL PRIMARY KEY,

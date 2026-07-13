@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { MessageCircle, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSettings } from '../../context/SettingsContext';
 
 export default function WhatsAppWidget() {
+  const { settings } = useSettings();
   const [showTooltip, setShowTooltip] = useState(true);
-  const phoneNumber = '441234567890';
+  const phoneNumber = (settings.whatsapp || '441234567890').replace(/[+\s]+/g, '');
 
   const getWhatsAppUrl = () => {
     const message = encodeURIComponent(
-      'Hello Borderless Trips! I would like to enquire about your services.'
+      `Hello ${settings.business_name || 'Borderless Trips'}! I would like to enquire about your services.`
     );
     return `https://wa.me/${phoneNumber}?text=${message}`;
   };

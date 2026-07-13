@@ -226,7 +226,7 @@ router.put('/:id', authenticate, async (req, res) => {
   const { id } = req.params;
   const {
     status, payment_status, payment_ref, notes, admin_notes, travel_date, travelers, assigned_to,
-    edit_unlocked, signature_link, signature_doc, signed_document_url, invoice_url
+    edit_unlocked, signature_link, signature_doc, signed_document_url, invoice_url, payment_requested
   } = req.body;
   const travelersData = req.body.travelersData !== undefined ? req.body.travelersData : req.body.travelers_json;
   const paymentInfo = req.body.paymentInfo !== undefined ? req.body.paymentInfo : req.body.payment_info_json;
@@ -258,6 +258,7 @@ router.put('/:id', authenticate, async (req, res) => {
           edit_unlocked = COALESCE(?, edit_unlocked), signature_link = COALESCE(?, signature_link),
           signature_doc = COALESCE(?, signature_doc), signed_document_url = COALESCE(?, signed_document_url),
           invoice_url = COALESCE(?, invoice_url),
+          payment_requested = COALESCE(?, payment_requested),
           updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `).run(
@@ -267,6 +268,7 @@ router.put('/:id', authenticate, async (req, res) => {
         paymentProof,
         comments ? JSON.stringify(comments) : null,
         edit_unlocked, signature_link, signature_doc, signed_document_url, invoice_url,
+        payment_requested,
         id
       );
 

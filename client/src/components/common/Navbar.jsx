@@ -110,9 +110,9 @@ export default function Navbar() {
           </div>
 
           <div className="navbar-actions">
-            <a href="tel:+1234567890" className="navbar-phone hide-mobile" id="nav-phone">
+            <a href={`tel:${(settings.phone || '+44 123 456 7890').replace(/\s+/g, '')}`} className="navbar-phone hide-mobile" id="nav-phone">
               <Phone size={16} />
-              <span>+1 234 567 890</span>
+              <span>{settings.phone || '+44 123 456 7890'}</span>
             </a>
 
             {user ? (
@@ -188,8 +188,8 @@ export default function Navbar() {
                 )
               )}
               <div className="mobile-menu-divider" />
-              <a href="tel:+1234567890" className="mobile-menu-link">
-                <Phone size={18} /> Call Us Now
+              <a href={`tel:${(settings.phone || '+44 123 456 7890').replace(/\s+/g, '')}`} className="mobile-menu-link">
+                <Phone size={18} /> {settings.phone || 'Call Us Now'}
               </a>
               {user ? (
                 <>

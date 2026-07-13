@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { MapPin, Clock, Star, Users, CheckCircle2, X as XIcon, Calendar, ArrowRight, Share2, Heart, Phone, ChevronDown } from 'lucide-react';
+import { useSettings } from '../context/SettingsContext';
 
 const packageData = {
   1: { id:1, title:'Romantic Paris Getaway', destination:'Paris, France', duration:'5 Days / 4 Nights', price:499, originalPrice:649, type:'honeymoon', rating:4.9, reviews:128, image:'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=1200&q=80', images:['https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=800&q=80','https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=800&q=80','https://images.unsplash.com/photo-1503917988258-f87a78e3c995?w=800&q=80'], description:'Experience the city of love with our carefully curated Paris getaway. From the Eiffel Tower to Montmartre, immerse yourself in Parisian charm.', includes:['4-star boutique hotel','Return flights from London','Daily breakfast','Eiffel Tower tickets','Seine River cruise','Airport transfers','Travel insurance'], excludes:['Lunch & dinner','Personal expenses','Optional tours'], itinerary:[{day:1,title:'Arrival & City Walk',desc:'Arrive in Paris, check into hotel, evening walk along Champs-Élysées.'},{day:2,title:'Iconic Paris',desc:'Visit the Eiffel Tower, lunch near Trocadéro, afternoon at the Louvre.'},{day:3,title:'Montmartre & Culture',desc:'Explore Montmartre, Sacré-Cœur, artist quarter, and local café culture.'},{day:4,title:'Seine & Shopping',desc:'Morning Seine river cruise, afternoon at Galeries Lafayette, farewell dinner.'},{day:5,title:'Departure',desc:'Breakfast and airport transfer for your return flight.'}]},
@@ -12,6 +13,7 @@ const packageData = {
 const getPackage = (id) => packageData[id] || packageData[1];
 
 export default function PackageDetailPage() {
+  const { settings } = useSettings();
   const { id } = useParams();
   const [pkg, setPkg] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -374,7 +376,7 @@ export default function PackageDetailPage() {
                     </div>
                   )}
 
-                  <a href="tel:+441234567890" className="btn btn-outline" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12 }}>
+                  <a href={`tel:${(settings.phone || '+44 123 456 7890').replace(/\s+/g, '')}`} className="btn btn-outline" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12 }}>
                     <Phone size={16}/> Call Us Now
                   </a>
                 </div>

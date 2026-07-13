@@ -84,9 +84,9 @@ router.get('/', authenticate, async (req, res) => {
 
 // POST /api/messages - Send a message
 router.post('/', authenticate, async (req, res) => {
-  const { message, user_id } = req.body;
+  const { message, user_id, attachment_url, attachment_name, attachment_type } = req.body;
 
-  if (!message || !message.trim()) {
+  if ((!message || !message.trim()) && !attachment_url) {
     return res.status(400).json({ error: 'Message cannot be empty.' });
   }
 
@@ -107,8 +107,10 @@ router.post('/', authenticate, async (req, res) => {
     }
 
     await db.prepare(
-      'INSERT INTO messages (user_id, sender, message) VALUES (?, ?, ?)'
-    ).run(targetUserId, sender, message.trim());
+      'INSERT INTO messages (user_id, sender, message, attachment_url, attachment_name, attachment_type) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(targetUserId, sender, (message || '').trim(), attachment_url || null, attachment_name || null, attachment_type || null);
+
+    const previewText = attachment_url ? `[Attachment: ${attachment_name || 'File'}]` : (message || '').trim().substring(0, 100);
 
     // Create a notification for the recipient
     if (sender === 'customer') {
@@ -117,13 +119,13 @@ router.post('/', authenticate, async (req, res) => {
       for (const admin of admins) {
         await db.prepare(
           "INSERT INTO notifications (user_id, title, message, type, link) VALUES (?, ?, ?, 'message', '/admin')"
-        ).run(admin.id, `New message from ${req.user.name}`, message.trim().substring(0, 100));
+        ).run(admin.id, `New message from ${req.user.name}`, previewText);
       }
     } else {
       // Notify customer
       await db.prepare(
         "INSERT INTO notifications (user_id, title, message, type, link) VALUES (?, ?, ?, 'message', '/portal')"
-      ).run(targetUserId, 'New message from Borderless Trips', message.trim().substring(0, 100));
+      ).run(targetUserId, 'New message from Borderless Trips', previewText);
     }
 
     res.status(201).json({ message: 'Message sent successfully.' });

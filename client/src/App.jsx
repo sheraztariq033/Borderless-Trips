@@ -34,6 +34,8 @@ const TrackPage = lazy(() => import('./pages/TrackPage'));
 const AuthPagesImport = () => import('./pages/AuthPages');
 const LoginPage = lazy(() => AuthPagesImport().then(m => ({ default: m.LoginPage })));
 const RegisterPage = lazy(() => AuthPagesImport().then(m => ({ default: m.RegisterPage })));
+const ForgotPasswordPage = lazy(() => AuthPagesImport().then(m => ({ default: m.ForgotPasswordPage })));
+const ResetPasswordPage = lazy(() => AuthPagesImport().then(m => ({ default: m.ResetPasswordPage })));
 const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'));
 
 // Loading fallback
@@ -91,6 +93,8 @@ function AppLayout() {
             <Route path="/blog/:slug" element={<BlogPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/portal" element={<ClientPortalPage />} />
             <Route path="/track" element={<TrackPage />} />
             <Route path="/auth/callback" element={<AuthCallbackPage />} />

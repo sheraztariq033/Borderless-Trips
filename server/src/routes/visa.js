@@ -232,7 +232,7 @@ router.get('/applications/:id', authenticate, async (req, res) => {
 // PUT /api/visa/applications/:id - Update application status/documents
 router.put('/applications/:id', authenticate, async (req, res) => {
   const { id } = req.params;
-  const { status, notes, admin_notes, assigned_to, edit_unlocked, signature_link, signature_doc, signed_document_url, invoice_url } = req.body;
+  const { status, notes, admin_notes, assigned_to, edit_unlocked, signature_link, signature_doc, signed_document_url, invoice_url, payment_requested } = req.body;
   const travelers = req.body.travelers !== undefined ? req.body.travelers : req.body.travelers_json;
   const paymentInfo = req.body.paymentInfo !== undefined ? req.body.paymentInfo : req.body.payment_info_json;
   const comments = req.body.comments !== undefined ? req.body.comments : req.body.comments_json;
@@ -271,6 +271,7 @@ router.put('/applications/:id', authenticate, async (req, res) => {
           signature_doc = COALESCE(?, signature_doc),
           signed_document_url = COALESCE(?, signed_document_url),
           invoice_url = COALESCE(?, invoice_url),
+          payment_requested = COALESCE(?, payment_requested),
           updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `).run(
@@ -288,6 +289,7 @@ router.put('/applications/:id', authenticate, async (req, res) => {
         signature_doc,
         signed_document_url,
         invoice_url,
+        payment_requested,
         id
       );
 

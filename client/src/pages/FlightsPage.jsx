@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Plane, Search, ArrowRight, Calendar, Users, MapPin, Phone, CheckCircle2 } from 'lucide-react';
+import { useSettings } from '../context/SettingsContext';
 
 const Reveal = ({ children, delay = 0 }) => (
   <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }}
@@ -20,6 +21,7 @@ const popularRoutes = [
 ];
 
 export default function FlightsPage() {
+  const { settings } = useSettings();
   const [form, setForm] = useState({ 
     from:'', to:'', departDate:'', returnDate:'', passengers:1, class:'economy', tripType:'return',
     name: '', email: '', phone: ''
@@ -239,7 +241,7 @@ export default function FlightsPage() {
                   )}
 
                   <div style={{ display:'flex', gap:12, justifyContent:'center', flexWrap:'wrap', marginTop: 16 }}>
-                    <a href="tel:+441234567890" className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Phone size={16}/> Call Now</a>
+                    <a href={`tel:${(settings.phone || '+44 123 456 7890').replace(/\s+/g, '')}`} className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Phone size={16}/> Call Now</a>
                     <button className="btn btn-outline" onClick={()=>setSubmitted(false)}>New Search</button>
                   </div>
                 </div>
