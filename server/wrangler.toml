@@ -1,7 +1,7 @@
 name = "borderless-backend"
 main = "worker.js"
-compatibility_date = "2025-04-01"
-compatibility_flags = [ "nodejs_compat", "nodejs_compat_populate_process_env" ]
+compatibility_date = "2025-09-01"
+compatibility_flags = [ "nodejs_compat", "nodejs_compat_populate_process_env", "enable_nodejs_http_modules", "enable_nodejs_http_server_modules" ]
 
 [vars]
 NODE_ENV = "production"

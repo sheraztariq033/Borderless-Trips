@@ -1,22 +1,48 @@
 // Borderless Trips 2.0 - PostgreSQL Database Pool Adapter
 // Bridges SQLite synchronous queries to asynchronous PostgreSQL queries for Supabase
 
-const { Pool } = require('pg');
+const isWorker = typeof globalThis.caches !== 'undefined';
 require('dotenv').config();
 
 let pool = null;
 
 const getPool = () => {
+  if (isWorker) {
+    return {
+      query: async (sql, params) => {
+        const connectionString = process.env.DATABASE_URL;
+        if (!connectionString) {
+          throw new Error("💥 DATABASE_URL is missing in environment variables.");
+        }
+        const cleanConnectionString = connectionString.replace(/[?&]sslmode=[^&]+/g, '');
+        const { Client } = require('@neondatabase/serverless');
+        const client = new Client({
+          connectionString: cleanConnectionString,
+          ssl: (connectionString.includes('supabase.co') || connectionString.includes('supabase.com'))
+            ? { rejectUnauthorized: false }
+            : false
+        });
+        await client.connect();
+        try {
+          return await client.query(sql, params);
+        } finally {
+          await client.end().catch(() => {});
+        }
+      }
+    };
+  }
+
   if (!pool) {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) {
       throw new Error("💥 DATABASE_URL is missing in environment variables. Database connection cannot be established.");
     }
     const cleanConnectionString = connectionString.replace(/[?&]sslmode=[^&]+/g, '');
+    const { Pool } = require('pg');
     pool = new Pool({
       connectionString: cleanConnectionString,
       ssl: (connectionString.includes('supabase.co') || connectionString.includes('supabase.com'))
-        ? { rejectUnauthorized: false } // Required for Supabase ssl connections
+        ? { rejectUnauthorized: false }
         : false
     });
   }
@@ -24,7 +50,7 @@ const getPool = () => {
 };
 
 // Initial connection test for environments where DATABASE_URL is populated on start
-if (process.env.DATABASE_URL) {
+if (process.env.DATABASE_URL && !isWorker) {
   try {
     const p = getPool();
     p.connect(async (err, client, release) => {
