@@ -1,10 +1,15 @@
+// Set global polyfill for __dirname before importing any CommonJS modules
+// This prevents ReferenceErrors on Edge runtimes which do not support node filesystems
+globalThis.__dirname = globalThis.__dirname || '';
+
 import { httpServerHandler } from 'cloudflare:node';
-import app from './src/app.js';
 import { runDailyChecks } from './src/utils/cron.js';
+
+// Load application dynamically to ensure global polyfills are applied first
+const app = require('./src/app.js');
 
 export default {
   async fetch(request, env, ctx) {
-    // Adapter wraps Express app into a Cloudflare HTTP listener
     const handler = httpServerHandler(app);
     return handler.fetch(request, env, ctx);
   },

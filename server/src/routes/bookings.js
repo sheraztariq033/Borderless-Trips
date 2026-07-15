@@ -1,5 +1,5 @@
 const express = require('express');
-const router = Router = express.Router();
+const router = express.Router();
 const db = require('../models/database');
 const { authenticate, adminOnly } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');

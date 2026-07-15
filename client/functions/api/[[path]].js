@@ -3,7 +3,7 @@ export async function onRequest(context) {
   
   // Retrieve target backend hostname from Cloudflare Pages Environment variables
   // Fallback to default workers.dev subdomain if not explicitly configured in Cloudflare Pages dashboard
-  const backendWorkerHost = context.env.BACKEND_WORKER_URL || 'borderless-backend.sheraztariq033.workers.dev';
+  const backendWorkerHost = context.env.BACKEND_WORKER_URL || 'borderless-backend.lastlook-pk.workers.dev';
   
   // Clean prefix and construct target URL
   const cleanHost = backendWorkerHost.replace(/^https?:\/\//, '').replace(/\/$/, '');

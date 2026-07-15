@@ -1,14 +1,22 @@
-const { S3Client, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const isWorker = typeof globalThis.caches !== 'undefined';
 
-const s3 = new S3Client({
-  region: 'auto',
-  endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
-  },
-  forcePathStyle: true,
-});
+let s3 = null;
+if (!isWorker) {
+  try {
+    const { S3Client } = require('@aws-sdk/client-s3');
+    s3 = new S3Client({
+      region: 'auto',
+      endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
+      },
+      forcePathStyle: true,
+    });
+  } catch (err) {
+    console.warn('⚠️ S3 Client failed to initialize:', err.message);
+  }
+}
 
 const BUCKET_NAME = process.env.R2_BUCKET_NAME || 'boardless-trips';
 
@@ -19,14 +27,27 @@ const BUCKET_NAME = process.env.R2_BUCKET_NAME || 'boardless-trips';
 function getObjectStream(key) {
   const passThrough = new (require('stream').PassThrough)();
   
-  s3.send(new GetObjectCommand({
-    Bucket: BUCKET_NAME,
-    Key: key,
-  })).then((response) => {
-    response.Body.pipe(passThrough);
-  }).catch((err) => {
+  if (isWorker) {
+    // Skip S3 client streams on Cloudflare Workers edge environment
+    passThrough.emit('error', new Error('Local stream proxy not supported on serverless edge.'));
+    return passThrough;
+  }
+
+  try {
+    const { GetObjectCommand } = require('@aws-sdk/client-s3');
+    if (!s3) throw new Error('S3 Client is not initialized.');
+    
+    s3.send(new GetObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+    })).then((response) => {
+      response.Body.pipe(passThrough);
+    }).catch((err) => {
+      passThrough.emit('error', err);
+    });
+  } catch (err) {
     passThrough.emit('error', err);
-  });
+  }
 
   return passThrough;
 }
@@ -36,7 +57,13 @@ function getObjectStream(key) {
  * @param {string} key 
  */
 async function deleteObject(key) {
+  if (isWorker) {
+    return true; // Bypass on Cloudflare Worker
+  }
   try {
+    const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
+    if (!s3) throw new Error('S3 Client is not initialized.');
+
     await s3.send(new DeleteObjectCommand({
       Bucket: BUCKET_NAME,
       Key: key,

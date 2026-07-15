@@ -43,9 +43,18 @@ class HybridStorage {
       }
     }) : null;
 
-    const uploadDir = path.join(__dirname, '..', '..', 'data', 'uploads');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
+    const isWorker = typeof globalThis.caches !== 'undefined';
+    const appDir = typeof __dirname !== 'undefined' ? __dirname : '';
+    const uploadDir = appDir ? path.join(appDir, '..', '..', 'data', 'uploads') : '';
+
+    if (!isWorker && uploadDir) {
+      if (!fs.existsSync(uploadDir)) {
+        try {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        } catch (err) {
+          console.warn('⚠️ Local uploads directory creation skipped:', err.message);
+        }
+      }
     }
 
     this.diskStorage = multer.diskStorage({
