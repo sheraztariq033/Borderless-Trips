@@ -1,10 +1,17 @@
 const rateLimit = require('express-rate-limit');
 
+// On Cloudflare Workers, req.ip is undefined. Use CF headers or a default.
+const getClientIp = (req) => {
+  return req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || req.ip || req.connection?.remoteAddress || '0.0.0.0';
+};
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 1000 : 10000, // limit to 1000 requests in prod, 10000 in dev
+  max: process.env.NODE_ENV === 'production' ? 1000 : 10000,
+  keyGenerator: getClientIp,
+  validate: { ip: false },
   skip: (req) => {
-    const ip = req.ip || req.connection.remoteAddress;
+    const ip = getClientIp(req);
     return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1' || process.env.NODE_ENV !== 'production';
   },
   standardHeaders: true,
@@ -16,9 +23,11 @@ const apiLimiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'production' ? 100 : 1000, // limit for auth endpoints
+  max: process.env.NODE_ENV === 'production' ? 100 : 1000,
+  keyGenerator: getClientIp,
+  validate: { ip: false },
   skip: (req) => {
-    const ip = req.ip || req.connection.remoteAddress;
+    const ip = getClientIp(req);
     return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1' || process.env.NODE_ENV !== 'production';
   },
   standardHeaders: true,
@@ -32,3 +41,4 @@ module.exports = {
   apiLimiter,
   authLimiter
 };
+

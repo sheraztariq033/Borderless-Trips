@@ -277,7 +277,8 @@ router.put('/settings', authenticate, adminOnly, async (req, res) => {
     }
     res.json({ message: 'Settings saved.' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to save settings.' });
+    console.error('💥 Failed to save settings error:', error);
+    res.status(500).json({ error: 'Failed to save settings: ' + error.message });
   }
 });
 

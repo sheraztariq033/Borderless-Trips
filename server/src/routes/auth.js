@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
+const { hashPassword, verifyPassword, signJwt, verifyJwt } = require('../utils/crypto');
 const db = require('../models/database');
 const { authenticate, JWT_SECRET } = require('../middleware/auth');
 const { authLimiter } = require('../middleware/rateLimiter');
@@ -20,13 +19,13 @@ router.post('/register', authLimiter, async (req, res) => {
       return res.status(400).json({ error: 'A user with this email already exists.' });
     }
 
-    const hash = bcrypt.hashSync(password, 10);
+    const hash = hashPassword(password);
     const result = await db.prepare(
       'INSERT INTO users (name, email, password_hash, phone, nationality, role, sub_role) VALUES (?, ?, ?, ?, ?, ?, ?)'
     ).run(name, email.toLowerCase(), hash, phone || '', nationality || '', 'customer', '');
 
     const userId = result.lastInsertRowid;
-    const token = jwt.sign({ id: userId, role: 'customer' }, JWT_SECRET, { expiresIn: '7d' });
+    const token = signJwt({ id: userId, role: 'customer' }, JWT_SECRET);
 
     res.status(201).json({
       token,
@@ -50,10 +49,11 @@ router.post('/login', authLimiter, async (req, res) => {
     if (!user) return res.status(400).json({ error: 'Invalid email or password.' });
     if (user.status === 'suspended') return res.status(403).json({ error: 'Account suspended. Contact admin.' });
 
-    const isMatch = bcrypt.compareSync(password, user.password_hash);
+    const isMatch = verifyPassword(password, user.password_hash);
     if (!isMatch) return res.status(400).json({ error: 'Invalid email or password.' });
 
-    const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+    console.log('🔑 SIGNING SECRET PREFIX:', String(JWT_SECRET).slice(0, 4), 'len:', String(JWT_SECRET).length);
+    const token = signJwt({ id: user.id, role: user.role }, JWT_SECRET);
 
     res.json({
       token,
@@ -64,7 +64,8 @@ router.post('/login', authLimiter, async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ error: 'Server error. Failed to log in.' });
+    console.error('💥 Login error:', error);
+    res.status(500).json({ error: 'Server error. Failed to log in: ' + error.message });
   }
 });
 
@@ -106,11 +107,16 @@ router.post('/forgot-password', authLimiter, async (req, res) => {
       return res.json({ message: 'If an account exists with that email, a reset link has been sent.' });
     }
 
-    // Generate a time-limited JWT reset token (1 hour expiry)
-    const resetToken = jwt.sign(
-      { id: user.id, email: user.email, purpose: 'password_reset' },
-      JWT_SECRET,
-      { expiresIn: '1h' }
+    // Generate a time-limited reset token (1 hour expiry) using our edge-compatible signJwt
+    const resetToken = signJwt(
+      {
+        id: user.id,
+        email: user.email,
+        purpose: 'password_reset',
+        // Override the default 7-day expiry with 1-hour expiry
+        exp: Math.floor(Date.now() / 1000) + (60 * 60)
+      },
+      JWT_SECRET
     );
 
     // Build reset URL (frontend route)
@@ -161,8 +167,8 @@ router.post('/reset-password', authLimiter, async (req, res) => {
   }
 
   try {
-    // Verify the reset token
-    const decoded = jwt.verify(token, JWT_SECRET);
+    // Verify the reset token using our edge-compatible verifyJwt
+    const decoded = verifyJwt(token, JWT_SECRET);
 
     if (decoded.purpose !== 'password_reset') {
       return res.status(400).json({ error: 'Invalid reset token.' });
@@ -175,15 +181,16 @@ router.post('/reset-password', authLimiter, async (req, res) => {
     }
 
     // Hash the new password and update
-    const hash = bcrypt.hashSync(password, 10);
+    const hash = hashPassword(password);
     await db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, user.id);
 
     res.json({ message: 'Password has been reset successfully. You can now log in with your new password.' });
   } catch (error) {
-    if (error.name === 'TokenExpiredError') {
+    // verifyJwt throws Error with specific messages for expired/invalid tokens
+    if (error.message === 'Token has expired') {
       return res.status(400).json({ error: 'This reset link has expired. Please request a new one.' });
     }
-    if (error.name === 'JsonWebTokenError') {
+    if (error.message === 'Invalid signature' || error.message === 'Invalid token structure') {
       return res.status(400).json({ error: 'Invalid reset link. Please request a new one.' });
     }
     console.error('Reset password error:', error);
@@ -234,7 +241,7 @@ router.post('/create-staff', authenticate, async (req, res) => {
     const exists = await db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase());
     if (exists) return res.status(400).json({ error: 'Email already in use.' });
 
-    const hash = bcrypt.hashSync(password, 10);
+    const hash = hashPassword(password);
     const validRoles = ['manager', 'agent', 'viewer'];
     const role = validRoles.includes(sub_role) ? sub_role : 'agent';
 
@@ -295,7 +302,7 @@ router.post('/customers', authenticate, async (req, res) => {
     }
 
     const tempPassword = password || 'welcome123';
-    const hash = bcrypt.hashSync(tempPassword, 10);
+    const hash = hashPassword(tempPassword);
     const userStatus = status || 'active';
 
     const result = await db.prepare(`
@@ -386,7 +393,7 @@ router.put('/staff/:id', authenticate, async (req, res) => {
 
     let passwordHash = existingStaff.password_hash;
     if (password && password.trim() !== '') {
-      passwordHash = bcrypt.hashSync(password, 10);
+      passwordHash = hashPassword(password);
     }
 
     const validRoles = ['manager', 'agent', 'viewer'];

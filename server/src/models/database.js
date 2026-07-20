@@ -1,7 +1,32 @@
 // Borderless Trips 2.0 - PostgreSQL Database Pool Adapter
 // Bridges SQLite synchronous queries to asynchronous PostgreSQL queries for Supabase
 
-const isWorker = typeof globalThis.caches !== 'undefined';
+const formatQuery = (sql, params) => {
+  if (!params || params.length === 0) return sql;
+  
+  let formattedSql = sql;
+  for (let i = params.length - 1; i >= 0; i--) {
+    const val = params[i];
+    let formattedVal;
+    
+    if (val === null || val === undefined) {
+      formattedVal = 'NULL';
+    } else if (typeof val === 'number') {
+      formattedVal = String(val);
+    } else if (typeof val === 'boolean') {
+      formattedVal = val ? 'TRUE' : 'FALSE';
+    } else {
+      const valStr = typeof val === 'object' ? JSON.stringify(val) : String(val);
+      formattedVal = "'" + valStr.replace(/'/g, "''") + "'";
+    }
+    
+    const regex = new RegExp('\\$' + (i + 1) + '(?![0-9])', 'g');
+    formattedSql = formattedSql.replace(regex, formattedVal);
+  }
+  return formattedSql;
+};
+
+const isWorker = typeof globalThis.caches !== 'undefined' && !(typeof process !== 'undefined' && process.release && process.release.name === 'node');
 require('dotenv').config();
 
 let pool = null;
@@ -10,24 +35,55 @@ const getPool = () => {
   if (isWorker) {
     return {
       query: async (sql, params) => {
-        const connectionString = process.env.DATABASE_URL;
-        if (!connectionString) {
-          throw new Error("💥 DATABASE_URL is missing in environment variables.");
+        const supabaseUrl = process.env.SUPABASE_URL;
+        const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+        if (!supabaseUrl || !supabaseAnonKey) {
+          throw new Error("💥 SUPABASE_URL and SUPABASE_ANON_KEY are missing in environment variables.");
         }
-        const cleanConnectionString = connectionString.replace(/[?&]sslmode=[^&]+/g, '');
-        const { Client } = require('@neondatabase/serverless');
-        const client = new Client({
-          connectionString: cleanConnectionString,
-          ssl: (connectionString.includes('supabase.co') || connectionString.includes('supabase.com'))
-            ? { rejectUnauthorized: false }
-            : false
+        
+        const formattedSql = formatQuery(sql, params);
+        console.log('💻 RUNNING WORKER SQL:', formattedSql);
+        
+        const cleanUrl = supabaseUrl.replace(/\/$/, '');
+        const rpcUrl = `${cleanUrl}/rest/v1/rpc/exec_sql`;
+        
+        const response = await fetch(rpcUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${supabaseAnonKey}`
+          },
+          body: JSON.stringify({
+            query_text: formattedSql
+          })
         });
-        await client.connect();
-        try {
-          return await client.query(sql, params);
-        } finally {
-          await client.end().catch(() => {});
+        
+        const data = await response.json();
+        console.log('💻 WORKER SQL RESULT ROWS:', Array.isArray(data) ? data.length : typeof data, data);
+        if (!response.ok) {
+          throw new Error(data.message || data.error || 'Database query error');
         }
+        
+        let rows = [];
+        let rowCount = 0;
+        
+        if (Array.isArray(data)) {
+          // Backward compatibility for old exec_sql array format
+          rows = data;
+          rowCount = data.length;
+        } else if (data && typeof data === 'object') {
+          if (data.error) {
+            throw new Error(`💥 Database RPC error: ${data.error} (State: ${data.state}, Query: ${data.query || formattedSql})`);
+          }
+          rows = Array.isArray(data.rows) ? data.rows : [];
+          rowCount = typeof data.rowCount === 'number' ? data.rowCount : rows.length;
+        }
+        
+        return {
+          rows,
+          rowCount
+        };
       }
     };
   }

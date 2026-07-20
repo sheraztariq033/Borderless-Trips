@@ -52,15 +52,8 @@ async function validateUploadedFile(req, res, next) {
       });
       
       const response = await s3Util.s3.send(command);
-      const streamToBuffer = async (stream) => {
-        return new Promise((resolve, reject) => {
-          const chunks = [];
-          stream.on('data', (chunk) => chunks.push(chunk));
-          stream.on('error', reject);
-          stream.on('end', () => resolve(Buffer.concat(chunks)));
-        });
-      };
-      fileBuffer = await streamToBuffer(response.Body);
+      const byteArray = await response.Body.transformToByteArray();
+      fileBuffer = Buffer.from(byteArray);
       
       if (!checkMagicBytes(fileBuffer, ext)) {
         console.warn(`🛑 Security Alert: File signature mismatch for uploaded R2 file ${key}. Deleting...`);

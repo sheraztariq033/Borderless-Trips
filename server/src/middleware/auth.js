@@ -1,8 +1,22 @@
-const jwt = require('jsonwebtoken');
+const { verifyJwt } = require('../utils/crypto');
 const db = require('../models/database');
 const { supabase } = require('../utils/supabase');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'borderless_secret_key_123';
+
+// Helper: fetch user by condition without LEFT JOIN (compatible with exec_sql RPC)
+async function fetchUser(field, value) {
+  const user = await db.prepare(
+    `SELECT id, name, email, phone, nationality, role, sub_role, profile_photo, passport_expiry, created_at, assigned_to FROM users WHERE ${field} = ?`
+  ).get(value);
+  if (user && user.assigned_to) {
+    const assignee = await db.prepare('SELECT name FROM users WHERE id = ?').get(user.assigned_to);
+    user.assigned_name = assignee ? assignee.name : null;
+  } else if (user) {
+    user.assigned_name = null;
+  }
+  return user;
+}
 
 async function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -14,20 +28,19 @@ async function authenticate(req, res, next) {
 
   // 1. Try local JWT verification first
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const user = await db.prepare(`
-      SELECT u.id, u.name, u.email, u.phone, u.nationality, u.role, u.sub_role, u.profile_photo, u.passport_expiry, u.created_at, u.assigned_to,
-        a.name as assigned_name
-      FROM users u
-      LEFT JOIN users a ON u.assigned_to = a.id
-      WHERE u.id = ?
-    `).get(decoded.id);
+    console.log('🔑 AUTH: secret prefix:', String(JWT_SECRET).substring(0, 8), 'len:', String(JWT_SECRET).length);
+    const decoded = verifyJwt(token, JWT_SECRET);
+    console.log('🔑 AUTH: JWT verified, user id:', decoded.id, 'role:', decoded.role);
+    const user = await fetchUser('id', decoded.id);
+    console.log('🔑 AUTH: DB user found:', !!user, user ? `id=${user.id} name=${user.name}` : 'null');
 
     if (user) {
       req.user = user;
       return next();
     }
   } catch (localError) {
+    console.error('💥 local JWT/DB auth error:', localError.message);
+    req.localAuthError = localError.message;
     // 2. If local fails, try Supabase Auth token verification
     if (supabase) {
       try {
@@ -36,35 +49,21 @@ async function authenticate(req, res, next) {
           const email = supabaseUser.email.toLowerCase();
           
           // Lookup database user by email
-          let dbUser = await db.prepare(`
-            SELECT u.id, u.name, u.email, u.phone, u.nationality, u.role, u.sub_role, u.profile_photo, u.passport_expiry, u.created_at, u.assigned_to,
-              a.name as assigned_name
-            FROM users u
-            LEFT JOIN users a ON u.assigned_to = a.id
-            WHERE u.email = ?
-          `).get(email);
+          let dbUser = await fetchUser('email', email);
 
           if (!dbUser) {
             // Auto-provision user in our database if they registered on Supabase
             const name = supabaseUser.user_metadata?.name || supabaseUser.user_metadata?.full_name || 'Customer';
             const phone = supabaseUser.user_metadata?.phone || '';
             const nationality = supabaseUser.user_metadata?.nationality || '';
-            
-            // Generate a random placeholder password hash
-            const bcrypt = require('bcryptjs');
-            const placeholderHash = bcrypt.hashSync(Math.random().toString(36), 10);
+            const { hashPassword } = require('../utils/crypto');
+            const placeholderHash = hashPassword(Math.random().toString(36));
             
             const insertResult = await db.prepare(
               'INSERT INTO users (name, email, password_hash, phone, nationality, role, sub_role) VALUES (?, ?, ?, ?, ?, ?, ?)'
             ).run(name, email, placeholderHash, phone, nationality, 'customer', '');
             
-            dbUser = await db.prepare(`
-              SELECT u.id, u.name, u.email, u.phone, u.nationality, u.role, u.sub_role, u.profile_photo, u.passport_expiry, u.created_at, u.assigned_to,
-                a.name as assigned_name
-              FROM users u
-              LEFT JOIN users a ON u.assigned_to = a.id
-              WHERE u.id = ?
-            `).get(insertResult.lastInsertRowid);
+            dbUser = await fetchUser('id', insertResult.lastInsertRowid);
           }
 
           if (dbUser) {
@@ -78,7 +77,7 @@ async function authenticate(req, res, next) {
     }
   }
 
-  return res.status(401).json({ error: 'Authentication failed. Invalid or expired token.' });
+  return res.status(401).json({ error: 'Authentication failed. Invalid or expired token: ' + (req.localAuthError || 'Unknown error') });
 }
 
 function adminOnly(req, res, next) {

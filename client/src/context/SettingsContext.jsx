@@ -16,7 +16,7 @@ export function SettingsProvider({ children }) {
     account_number: 'XXXXXXXX',
     address: 'London, United Kingdom',
     currency: 'GBP',
-    logo_url: '/logo.png',
+    logo_url: '/logo.svg',
     hero_images: [
       "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=1600&q=80",
       "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1600&q=80",
@@ -24,7 +24,7 @@ export function SettingsProvider({ children }) {
       "https://images.unsplash.com/photo-1516483638261-f4dbaf036963?w=1600&q=80",
       "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1600&q=80"
     ],
-    hero_video: 'https://player.vimeo.com/external/434045526.sd.mp4?s=c27d23d8c1ad2125e98583fb24285e683f491176&profile_id=165&oauth2_token_id=57447761'
+    hero_video: 'https://www.w3schools.com/html/movie.mp4'
   });
   const [loading, setLoading] = useState(true);
 

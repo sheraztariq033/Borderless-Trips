@@ -53,7 +53,7 @@ export default function Navbar() {
       >
         <div className="container navbar-inner">
           <Link to="/" className="navbar-logo" id="nav-logo">
-            <img src={settings.logo_url || "/logo.png"} alt={settings.business_name || "Borderless Trips"} className="navbar-logo-img" />
+            <img src={settings.logo_url || "/logo.svg"} alt={settings.business_name || "Borderless Trips"} className="navbar-logo-img" onError={e => { e.target.onerror = null; e.target.src = '/logo.svg'; }} />
             <div className="navbar-logo-text">
               <span className="navbar-brand">{settings.business_name || "Borderless Trips"}</span>
               <span className="navbar-tagline">Unlimited Journeys</span>

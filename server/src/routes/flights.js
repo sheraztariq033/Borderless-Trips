@@ -47,9 +47,9 @@ router.post('/request', async (req, res) => {
         userExists = true;
       } else {
         // Auto-create customer user
-        const bcrypt = require('bcryptjs');
+        const { hashPassword } = require('../utils/crypto');
         tempPassword = 'welcome123';
-        const hash = bcrypt.hashSync(tempPassword, 10);
+        const hash = hashPassword(tempPassword);
         const result = await db.prepare(
           'INSERT INTO users (name, email, password_hash, phone, role, sub_role) VALUES (?, ?, ?, ?, ?, ?)'
         ).run(customerName || 'Flight Customer', emailLower, hash, customerPhone || '', 'customer', '');

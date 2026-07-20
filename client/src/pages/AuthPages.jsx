@@ -50,7 +50,7 @@ export function LoginPage() {
       <motion.div initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }}
         style={{ width:'100%', maxWidth:440, padding:0 }}>
         <div className="text-center" style={{ marginBottom:'var(--space-8)' }}>
-          <Link to="/"><img src={settings.logo_url || "/logo.svg"} alt="Borderless Trips" style={{ width:64, height:64, margin:'0 auto', borderRadius:12 }}/></Link>
+          <Link to="/"><img src={settings.logo_url || "/logo.svg"} alt="Borderless Trips" style={{ width:64, height:64, margin:'0 auto', borderRadius:12 }} onError={e => { e.target.onerror = null; e.target.src = '/logo.svg'; }}/></Link>
           <h1 className="heading-2" style={{ marginTop:16 }}>Welcome Back</h1>
           <p className="text-muted">Sign in to your Borderless Trips account</p>
         </div>
@@ -162,7 +162,7 @@ export function RegisterPage() {
       <motion.div initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }}
         style={{ width:'100%', maxWidth:440 }}>
         <div className="text-center" style={{ marginBottom:'var(--space-6)' }}>
-          <Link to="/"><img src={settings.logo_url || "/logo.svg"} alt="Borderless Trips" style={{ width:64, height:64, margin:'0 auto', borderRadius:12 }}/></Link>
+          <Link to="/"><img src={settings.logo_url || "/logo.svg"} alt="Borderless Trips" style={{ width:64, height:64, margin:'0 auto', borderRadius:12 }} onError={e => { e.target.onerror = null; e.target.src = '/logo.svg'; }}/></Link>
           <h1 className="heading-2" style={{ marginTop:16 }}>Create Account</h1>
           <p className="text-muted">Join Borderless Trips for exclusive access</p>
         </div>
@@ -276,7 +276,7 @@ export function ForgotPasswordPage() {
         style={{ width:'100%', maxWidth:440, padding:0 }}>
         <div className="text-center" style={{ marginBottom:'var(--space-8)' }}>
           <Link to="/">
-            <img src={settings.logo_url || "/logo.svg"} alt="Borderless Trips" style={{ width:72, height:72, margin:'0 auto', borderRadius:16, boxShadow:'0 10px 25px rgba(0,0,0,0.15)' }}/>
+            <img src={settings.logo_url || "/logo.svg"} alt="Borderless Trips" style={{ width:72, height:72, margin:'0 auto', borderRadius:16, boxShadow:'0 10px 25px rgba(0,0,0,0.15)' }} onError={e => { e.target.onerror = null; e.target.src = '/logo.svg'; }}/>
           </Link>
           <h1 className="heading-2" style={{ marginTop:20, fontWeight:800, color:'var(--color-text)' }}>Reset Password</h1>
           <p className="text-muted" style={{ fontSize:'var(--text-sm)', marginTop:6 }}>Enter your email and we'll send you a password reset link</p>
@@ -411,7 +411,7 @@ export function ResetPasswordPage() {
         style={{ width:'100%', maxWidth:440, padding:0 }}>
         <div className="text-center" style={{ marginBottom:'var(--space-8)' }}>
           <Link to="/">
-            <img src={settings.logo_url || "/logo.svg"} alt="Borderless Trips" style={{ width:72, height:72, margin:'0 auto', borderRadius:16, boxShadow:'0 10px 25px rgba(0,0,0,0.15)' }}/>
+            <img src={settings.logo_url || "/logo.svg"} alt="Borderless Trips" style={{ width:72, height:72, margin:'0 auto', borderRadius:16, boxShadow:'0 10px 25px rgba(0,0,0,0.15)' }} onError={e => { e.target.onerror = null; e.target.src = '/logo.svg'; }}/>
           </Link>
           <h1 className="heading-2" style={{ marginTop:20, fontWeight:800, color:'var(--color-text)' }}>Set New Password</h1>
           <p className="text-muted" style={{ fontSize:'var(--text-sm)', marginTop:6 }}>Choose a strong and secure password for your account</p>

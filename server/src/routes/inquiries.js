@@ -171,9 +171,9 @@ router.post('/evaluate', async (req, res) => {
       userId = existingUser.id;
     } else {
       // Auto-create account
-      const bcrypt = require('bcryptjs');
+      const { hashPassword } = require('../utils/crypto');
       tempPassword = `welcome123`;
-      const hash = bcrypt.hashSync(tempPassword, 10);
+      const hash = hashPassword(tempPassword);
       
       const userResult = await db.prepare(
         'INSERT INTO users (name, email, password_hash, phone, nationality, role, sub_role) VALUES (?, ?, ?, ?, ?, ?, ?)'
@@ -262,9 +262,9 @@ router.post('/:id/convert', authenticate, adminOnly, async (req, res) => {
         userId = user.id;
       } else {
         // Create customer account
-        const bcrypt = require('bcryptjs');
+        const { hashPassword } = require('../utils/crypto');
         const tempPassword = 'welcome' + Math.floor(1000 + Math.random() * 9000);
-        const hash = bcrypt.hashSync(tempPassword, 10);
+        const hash = hashPassword(tempPassword);
         const userInsert = await db.prepare(`
           INSERT INTO users (name, email, password_hash, phone, role, status)
           VALUES (?, ?, ?, ?, 'customer', 'active')

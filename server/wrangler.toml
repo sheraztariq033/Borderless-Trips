@@ -6,6 +6,19 @@ compatibility_flags = [ "nodejs_compat", "nodejs_compat_populate_process_env", "
 [vars]
 NODE_ENV = "production"
 PORT = "3001"
+DATABASE_URL = "postgresql://postgres.hbaodeecvxqkqxbqgosb:Ua3cPv69wvdJDbsB@db.hbaodeecvxqkqxbqgosb.supabase.co:5432/postgres?sslmode=require"
+SUPABASE_URL = "https://hbaodeecvxqkqxbqgosb.supabase.co"
+SUPABASE_ANON_KEY = "sb_publishable_3QcrkE4k3zgD_4IHaKXecg_JhU2AciK"
+R2_ACCOUNT_ID = "9736dabea5181dc8479778b497a36fac"
+R2_ACCESS_KEY_ID = "192d2217d610526f12677b7c909d768e"
+R2_SECRET_ACCESS_KEY = "3f93f7f68ca7f7a48321c08af22dab5874ce5494f14b4bbf37b0734696fd20d6"
+R2_BUCKET_NAME = "borderless"
+JWT_SECRET = "borderless_secret_key_123"
+SITE_URL = "https://borderlesstrips.com"
 
 [triggers]
 crons = ["0 0 * * *"] # Run daily checks at midnight
+
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "borderless"

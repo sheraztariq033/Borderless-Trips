@@ -664,6 +664,7 @@ export default function AdminPage() {
   const [packages, setPackages] = useState([]);
   const [blogPosts, setBlogPosts] = useState([]);
   const [mediaFiles, setMediaFiles] = useState([]);
+  const [uploadProgress, setUploadProgress] = useState(null);
   const [creatingFutureLead, setCreatingFutureLead] = useState(false);
   const [fForm, setFForm] = useState({ name: '', email: '', phone: '', destination: '', intended_travel_date: '', notes: '' });
   const [savingFutureLead, setSavingFutureLead] = useState(false);
@@ -1061,13 +1062,18 @@ export default function AdminPage() {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      const res = await api.upload('/upload', formData);
+      setUploadProgress(0);
+      const res = await api.uploadWithProgress('/upload', formData, (percent) => {
+        setUploadProgress(percent);
+      });
       if (res.url) {
         onSuccess(res.url);
         showToast('File uploaded successfully');
       }
     } catch (err) {
       showToast(err.message || 'Upload failed', 'error');
+    } finally {
+      setUploadProgress(null);
     }
   };
 
@@ -1406,7 +1412,10 @@ export default function AdminPage() {
       const formData = new FormData();
       formData.append('file', file);
       
-      const res = await api.post('/upload', formData);
+      setUploadProgress(0);
+      const res = await api.uploadWithProgress('/upload', formData, (percent) => {
+        setUploadProgress(percent);
+      });
       
       // Send message immediately with the uploaded attachment
       await api.post('/messages', {
@@ -1424,6 +1433,7 @@ export default function AdminPage() {
       showToast('Failed to upload file: ' + err.message, 'error');
     } finally {
       setUploadingChatFile(false);
+      setUploadProgress(null);
       if (chatFileInputRef.current) chatFileInputRef.current.value = '';
     }
   };
@@ -2619,16 +2629,33 @@ export default function AdminPage() {
                               if (!e.target.files.length) return;
                               setLoading(true);
                               let successCount = 0;
+                              let index = 0;
+                              const totalFiles = e.target.files.length;
                               for (let file of e.target.files) {
+                                index++;
                                 const formData = new FormData();
                                 formData.append('file', file);
                                 try {
-                                  await api.upload('/upload', formData);
+                                  setUploadProgress({
+                                    filename: file.name,
+                                    percent: 0,
+                                    current: index,
+                                    total: totalFiles
+                                  });
+                                  await api.uploadWithProgress('/upload', formData, (percent) => {
+                                    setUploadProgress({
+                                      filename: file.name,
+                                      percent,
+                                      current: index,
+                                      total: totalFiles
+                                    });
+                                  });
                                   successCount++;
                                 } catch (uploadErr) {
                                   showToast(`Failed to upload ${file.name}: ${uploadErr.message}`, 'error');
                                 }
                               }
+                              setUploadProgress(null);
                               if (successCount > 0) {
                                 showToast(`Successfully uploaded ${successCount} file(s)`);
                                 await loadAllData(true);
@@ -3003,7 +3030,7 @@ export default function AdminPage() {
                               className="form-input"
                               value={businessSettings.logo_url || ''}
                               onChange={e => setBusinessSettings({ ...businessSettings, logo_url: e.target.value })}
-                              placeholder="/logo.png"
+                              placeholder="/logo.svg"
                               style={{ flex:1 }}
                             />
                             <label className="btn btn-outline btn-sm" style={{ cursor:'pointer', height:38, display:'flex', alignItems:'center', margin:0 }}>
@@ -3036,13 +3063,13 @@ export default function AdminPage() {
 
                         {/* Hero Video Upload */}
                         <div className="form-group">
-                          <label className="form-label">Hero Background Video URL</label>
+                          <label className="form-label">Hero Background Video URL (MP4, YouTube, or Vimeo)</label>
                           <div style={{ display:'flex', gap:10, alignItems:'center' }}>
                             <input
                               className="form-input"
                               value={businessSettings.hero_video || ''}
                               onChange={e => setBusinessSettings({ ...businessSettings, hero_video: e.target.value })}
-                              placeholder="Video URL"
+                              placeholder="Paste YouTube, Vimeo, or direct .mp4 URL"
                               style={{ flex:1 }}
                             />
                             <label className="btn btn-outline btn-sm" style={{ cursor:'pointer', height:38, display:'flex', alignItems:'center', margin:0 }}>
@@ -3060,6 +3087,9 @@ export default function AdminPage() {
                               ✅ Video active: {businessSettings.hero_video}
                             </div>
                           )}
+                          <div style={{ fontSize:11, color:'var(--color-text-muted)', marginTop:4 }}>
+                            💡 Supports YouTube (e.g. https://youtube.com/watch?v=xxx), Vimeo (e.g. https://vimeo.com/123), or direct video file URLs (.mp4, .webm)
+                          </div>
                         </div>
 
                         {/* Hero Images Upload */}
@@ -4741,6 +4771,7 @@ export default function AdminPage() {
 
       <style>{`
         @keyframes spin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
+        @keyframes slideUp { from{transform:translateY(20px); opacity:0} to{transform:translateY(0); opacity:1} }
         .spinner { width:36px; height:36px; border:3px solid var(--color-border); border-top:3px solid var(--color-secondary); border-radius:50%; animation:spin 1s linear infinite; margin:0 auto; }
         .admin-mobile-toggle { display:none; position:fixed; bottom:85px; left:20px; right:auto; z-index:var(--z-widget); background:var(--color-primary); color:white; border:none; border-radius:var(--radius-full); padding:12px 20px; font-weight:600; font-size:13px; box-shadow:var(--shadow-lg); cursor:pointer; gap:8px; align-items:center; }
         .admin-sidebar { width:220px; background:var(--color-primary); min-height:calc(100vh - var(--nav-height)); position:sticky; top:var(--nav-height); flex-shrink:0; padding:20px 12px; overflow-y:auto; max-height:calc(100vh - var(--nav-height)); }
@@ -4773,6 +4804,50 @@ export default function AdminPage() {
           main { padding:16px 16px 140px 16px !important; }
         }
       `}</style>
+
+      {uploadProgress !== null && (
+        <div style={{
+          position: 'fixed',
+          bottom: 24,
+          right: 24,
+          zIndex: 99999,
+          background: 'var(--color-bg-card)',
+          border: '1px solid var(--color-border)',
+          boxShadow: 'var(--shadow-xl)',
+          borderRadius: 12,
+          padding: '16px 20px',
+          width: 320,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
+          animation: 'slideUp 0.3s ease-out'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text)' }}>
+              {typeof uploadProgress === 'object' 
+                ? `Uploading (${uploadProgress.current}/${uploadProgress.total})` 
+                : 'Uploading File...'}
+            </span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-secondary)' }}>
+              {typeof uploadProgress === 'object' ? uploadProgress.percent : uploadProgress}%
+            </span>
+          </div>
+          {typeof uploadProgress === 'object' && uploadProgress.filename && (
+            <div style={{ fontSize: 11, color: 'var(--color-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {uploadProgress.filename}
+            </div>
+          )}
+          <div style={{ width: '100%', height: 6, background: 'var(--color-border)', borderRadius: 3, overflow: 'hidden' }}>
+            <div style={{ 
+              width: `${typeof uploadProgress === 'object' ? uploadProgress.percent : uploadProgress}%`, 
+              height: '100%', 
+              background: 'linear-gradient(90deg, var(--color-secondary), var(--color-secondary-hover))', 
+              transition: 'width 0.2s ease-out',
+              borderRadius: 3
+            }} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -31,19 +31,9 @@ const fileFilter = (req, file, cb) => {
 // Hybrid Storage Engine that attempts R2 upload first, then falls back to local disk on failure
 class HybridStorage {
   constructor() {
-    this.s3Storage = isR2Configured ? multerS3({
-      s3: s3Util.s3,
-      bucket: s3Util.BUCKET_NAME,
-      metadata: function (req, file, cb) {
-        cb(null, { fieldName: file.fieldname });
-      },
-      key: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-      }
-    }) : null;
+    this.s3Storage = null;
 
-    const isWorker = typeof globalThis.caches !== 'undefined';
+    const isWorker = typeof globalThis.caches !== 'undefined' && !(typeof process !== 'undefined' && process.release && process.release.name === 'node');
     const appDir = typeof __dirname !== 'undefined' ? __dirname : '';
     const uploadDir = appDir ? path.join(appDir, '..', '..', 'data', 'uploads') : '';
 
@@ -70,11 +60,37 @@ class HybridStorage {
     this.r2Failed = false;
   }
 
+  getS3Storage() {
+    if (this.s3Storage) return this.s3Storage;
+    
+    const isR2Configured = !!(
+      process.env.R2_ACCOUNT_ID && !process.env.R2_ACCOUNT_ID.startsWith('YOUR_') &&
+      process.env.R2_ACCESS_KEY_ID && !process.env.R2_ACCESS_KEY_ID.startsWith('YOUR_') &&
+      process.env.R2_SECRET_ACCESS_KEY && !process.env.R2_SECRET_ACCESS_KEY.startsWith('YOUR_')
+    );
+
+    if (isR2Configured) {
+      this.s3Storage = multerS3({
+        s3: s3Util.s3,
+        bucket: s3Util.BUCKET_NAME,
+        metadata: function (req, file, cb) {
+          cb(null, { fieldName: file.fieldname });
+        },
+        key: function (req, file, cb) {
+          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+        }
+      });
+    }
+    return this.s3Storage;
+  }
+
   _handleFile(req, file, cb) {
     const self = this;
-    if (self.s3Storage && !self.r2Failed) {
+    const s3Storage = self.getS3Storage();
+    if (s3Storage && !self.r2Failed) {
       console.log('☁️ Multer: Attempting Cloudflare R2 upload...');
-      self.s3Storage._handleFile(req, file, function (err, info) {
+      s3Storage._handleFile(req, file, function (err, info) {
         if (err) {
           console.warn('⚠️ Cloudflare R2 upload failed, falling back to local disk storage:', err.message);
           self.r2Failed = true; // Disable R2 for subsequent file writes in this process
@@ -91,8 +107,9 @@ class HybridStorage {
   }
 
   _removeFile(req, file, cb) {
-    if (this.s3Storage && !this.r2Failed) {
-      this.s3Storage._removeFile(req, file, cb);
+    const s3Storage = this.getS3Storage();
+    if (s3Storage && !this.r2Failed) {
+      s3Storage._removeFile(req, file, cb);
     } else {
       this.diskStorage._removeFile(req, file, cb);
     }

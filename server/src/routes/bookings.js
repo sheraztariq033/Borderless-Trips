@@ -12,7 +12,7 @@ function generateBookingRef() {
 
 async function resolveAndLinkTravelers(travelersList) {
   if (!travelersList || !Array.isArray(travelersList)) return travelersList;
-  const bcrypt = require('bcryptjs');
+  const { hashPassword } = require('../utils/crypto');
   
   const promises = travelersList.map(async (t) => {
     if (t.email && t.email.trim()) {
@@ -24,7 +24,7 @@ async function resolveAndLinkTravelers(travelersList) {
         } else {
           // Auto-create customer user
           const tempPassword = 'welcome123';
-          const hash = bcrypt.hashSync(tempPassword, 10);
+          const hash = hashPassword(tempPassword);
           const name = t.name || 'Traveler';
           const phone = t.phone || '';
           const nationality = t.nationality || '';
@@ -91,9 +91,9 @@ router.post('/', async (req, res) => {
         userExists = true;
       } else {
         // Auto-create customer user
-        const bcrypt = require('bcryptjs');
+        const { hashPassword } = require('../utils/crypto');
         tempPassword = 'welcome123';
-        const hash = bcrypt.hashSync(tempPassword, 10);
+        const hash = hashPassword(tempPassword);
         const result = await db.prepare(
           'INSERT INTO users (name, email, password_hash, phone, role, sub_role) VALUES (?, ?, ?, ?, ?, ?)'
         ).run(name, emailLower, hash, phone || '', 'customer', '');

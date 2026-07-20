@@ -64,7 +64,7 @@ export default function Footer() {
             {/* Brand */}
             <div className="footer-col footer-brand-col">
               <Link to="/" className="footer-logo">
-                <img src={settings.logo_url || "/logo.png"} alt={settings.business_name || "Borderless Trips"} style={{ width: 50, height: 50, borderRadius: 8 }} />
+                <img src={settings.logo_url || "/logo.svg"} alt={settings.business_name || "Borderless Trips"} style={{ width: 50, height: 50, borderRadius: 8 }} />
                 <div>
                   <div className="footer-brand-name">{settings.business_name || "Borderless Trips"}</div>
                   <div className="footer-brand-tag">Unlimited Journeys, Endless Discoveries</div>

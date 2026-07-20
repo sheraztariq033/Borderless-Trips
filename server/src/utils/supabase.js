@@ -1,12 +1,23 @@
 const { createClient } = require('@supabase/supabase-js');
 
-const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
+let supabaseInstance = null;
 
-const supabase = (supabaseUrl && supabaseAnonKey)
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
+function getSupabase() {
+  if (supabaseInstance) return supabaseInstance;
+  
+  const supabaseUrl = process.env.SUPABASE_URL || '';
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
 
-module.exports = {
-  supabase,
-};
+  if (supabaseUrl && supabaseAnonKey) {
+    supabaseInstance = createClient(supabaseUrl, supabaseAnonKey);
+  }
+  return supabaseInstance;
+}
+
+module.exports = {};
+
+Object.defineProperty(module.exports, 'supabase', {
+  get: () => getSupabase(),
+  configurable: true,
+  enumerable: true
+});

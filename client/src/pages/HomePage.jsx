@@ -101,7 +101,7 @@ export default function HomePage() {
     "https://images.unsplash.com/photo-1516483638261-f4dbaf036963?w=1600&q=80",
     "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1600&q=80"
   ];
-  const heroVideo = settings.hero_video || "https://player.vimeo.com/external/434045526.sd.mp4?s=c27d23d8c1ad2125e98583fb24285e683f491176&profile_id=165&oauth2_token_id=57447761";
+  const heroVideo = settings.hero_video || "https://www.w3schools.com/html/movie.mp4";
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -132,19 +132,51 @@ export default function HomePage() {
                 className={`hero-bg-img ${idx === currentHeroImage ? 'active' : ''}`}
               />
             ))
-          ) : (
-            <video
-              src={heroVideo}
-              autoPlay
-              loop
-              muted
-              playsInline
-              preload="auto"
-              poster="https://images.unsplash.com/photo-1506012787146-f92b2d7d6d96?q=80&w=1600"
-              className="hero-bg-video"
-              style={{ objectFit: 'cover' }}
-            />
-          )}
+          ) : (() => {
+            // Detect YouTube URLs
+            const ytMatch = heroVideo.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
+            // Detect Vimeo URLs
+            const vimeoMatch = heroVideo.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+
+            if (ytMatch) {
+              return (
+                <iframe
+                  src={`https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&mute=1&loop=1&playlist=${ytMatch[1]}&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1`}
+                  title="Hero background video"
+                  className="hero-bg-video"
+                  style={{ objectFit: 'cover', border: 'none' }}
+                  allow="autoplay; encrypted-media"
+                  allowFullScreen
+                />
+              );
+            }
+            if (vimeoMatch) {
+              return (
+                <iframe
+                  src={`https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1&muted=1&loop=1&background=1&controls=0`}
+                  title="Hero background video"
+                  className="hero-bg-video"
+                  style={{ objectFit: 'cover', border: 'none' }}
+                  allow="autoplay; encrypted-media"
+                  allowFullScreen
+                />
+              );
+            }
+            // Direct video file (mp4, webm, etc.)
+            return (
+              <video
+                src={heroVideo}
+                autoPlay
+                loop
+                muted
+                playsInline
+                preload="auto"
+                poster="https://images.unsplash.com/photo-1506012787146-f92b2d7d6d96?q=80&w=1600"
+                className="hero-bg-video"
+                style={{ objectFit: 'cover' }}
+              />
+            );
+          })()}
           <div className="hero-overlay" />
         </div>
         <div className="container hero-content">
@@ -581,6 +613,19 @@ export default function HomePage() {
           height: 100%;
           object-fit: cover;
           z-index: 1;
+          pointer-events: none;
+        }
+
+        /* Iframes (YouTube/Vimeo) can't use object-fit, so we scale them up to cover */
+        iframe.hero-bg-video {
+          width: 100vw;
+          height: 56.25vw; /* 16:9 */
+          min-height: 100vh;
+          min-width: 177.77vh; /* 16:9 */
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
         }
 
         .hero-overlay {

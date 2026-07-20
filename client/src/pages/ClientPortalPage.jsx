@@ -87,7 +87,10 @@ function PortalCaseExtensions({ item, type, loadPortalData, setSigningFile, setA
     formData.append('file', file);
     try {
       setUploading(true);
-      const res = await api.post('/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setUploadProgress(0);
+      const res = await api.uploadWithProgress('/upload', formData, (percent) => {
+        setUploadProgress(percent);
+      });
       if(res.url) {
         const endpoint = type === 'visa' ? `/visa/applications/${item.id}` : `/bookings/${item.id}`;
         await api.put(endpoint, { payment_proof: res.url });
@@ -98,6 +101,7 @@ function PortalCaseExtensions({ item, type, loadPortalData, setSigningFile, setA
       alert('Upload failed: ' + err.message);
     } finally {
       setUploading(false);
+      setUploadProgress(null);
     }
   };
 
@@ -108,7 +112,10 @@ function PortalCaseExtensions({ item, type, loadPortalData, setSigningFile, setA
     formData.append('file', file);
     try {
       setUploading(true);
-      const res = await api.post('/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setUploadProgress(0);
+      const res = await api.uploadWithProgress('/upload', formData, (percent) => {
+        setUploadProgress(percent);
+      });
       if(res.url) {
         const endpoint = type === 'visa' ? `/visa/applications/${item.id}` : `/bookings/${item.id}`;
         await api.put(endpoint, { signed_document_url: res.url });
@@ -119,6 +126,7 @@ function PortalCaseExtensions({ item, type, loadPortalData, setSigningFile, setA
       alert('Upload failed: ' + err.message);
     } finally {
       setUploading(false);
+      setUploadProgress(null);
     }
   };
 
@@ -498,6 +506,7 @@ export default function ClientPortalPage() {
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
   const [uploadingChatFile, setUploadingChatFile] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null);
   const chatFileInputRef = useRef(null);
   const msgEndRef = useRef(null);
 
@@ -761,7 +770,10 @@ export default function ClientPortalPage() {
     formData.append('file', file);
     try {
       setUploadingDoc(true);
-      const fileData = await api.upload('/upload', formData);
+      setUploadProgress(0);
+      const fileData = await api.uploadWithProgress('/upload', formData, (percent) => {
+        setUploadProgress(percent);
+      });
       const app = visaApps.find(a => a.id === visaAppId);
       if (!app) return;
       
@@ -784,7 +796,10 @@ export default function ClientPortalPage() {
       await api.put(`/visa/applications/${app.id}`, { documents: updatedDocs });
       await loadPortalData();
     } catch (err) { alert('Upload failed: ' + err.message); }
-    finally { setUploadingDoc(false); }
+    finally {
+      setUploadingDoc(false);
+      setUploadProgress(null);
+    }
   };
 
   const handleSendMessage = async () => {
@@ -807,7 +822,10 @@ export default function ClientPortalPage() {
       const formData = new FormData();
       formData.append('file', file);
       
-      const res = await api.post('/upload', formData);
+      setUploadProgress(0);
+      const res = await api.uploadWithProgress('/upload', formData, (percent) => {
+        setUploadProgress(percent);
+      });
       
       // Send message immediately with the uploaded attachment
       await api.post('/messages', {
@@ -824,6 +842,7 @@ export default function ClientPortalPage() {
       alert('Failed to upload file: ' + err.message);
     } finally {
       setUploadingChatFile(false);
+      setUploadProgress(null);
       if (chatFileInputRef.current) chatFileInputRef.current.value = '';
     }
   };
@@ -2442,6 +2461,7 @@ export default function ClientPortalPage() {
 
       <style>{`
         @keyframes spin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
+        @keyframes slideUp { from{transform:translateY(20px); opacity:0} to{transform:translateY(0); opacity:1} }
         .portal-spinner { width:36px; height:36px; border:3px solid var(--color-border); border-top:3px solid var(--color-secondary); border-radius:50%; animation:spin 1s linear infinite; margin:0 auto; }
         .portal-mobile-toggle { display:none; position:fixed; bottom:85px; left:20px; right:auto; z-index:var(--z-widget); background:var(--color-secondary); color:white; border:none; border-radius:var(--radius-full); padding:12px 20px; font-weight:600; font-size:13px; box-shadow:var(--shadow-lg); cursor:pointer; gap:8px; align-items:center; }
         .portal-sidebar { width:240px; background:var(--color-surface); border-right:1px solid var(--color-border); min-height:calc(100vh - var(--nav-height)); position:sticky; top:var(--nav-height); flex-shrink:0; overflow-y:auto; max-height:calc(100vh - var(--nav-height)); }
@@ -2504,6 +2524,43 @@ export default function ClientPortalPage() {
           }
         }
       `}</style>
+
+      {uploadProgress !== null && (
+        <div style={{
+          position: 'fixed',
+          bottom: 24,
+          right: 24,
+          zIndex: 99999,
+          background: 'var(--color-bg-card)',
+          border: '1px solid var(--color-border)',
+          boxShadow: 'var(--shadow-xl)',
+          borderRadius: 12,
+          padding: '16px 20px',
+          width: 320,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
+          animation: 'slideUp 0.3s ease-out'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text)' }}>
+              Uploading File...
+            </span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-secondary)' }}>
+              {uploadProgress}%
+            </span>
+          </div>
+          <div style={{ width: '100%', height: 6, background: 'var(--color-border)', borderRadius: 3, overflow: 'hidden' }}>
+            <div style={{ 
+              width: `${uploadProgress}%`, 
+              height: '100%', 
+              background: 'linear-gradient(90deg, var(--color-secondary), var(--color-secondary-hover))', 
+              transition: 'width 0.2s ease-out',
+              borderRadius: 3
+            }} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

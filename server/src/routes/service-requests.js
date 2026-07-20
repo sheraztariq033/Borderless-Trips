@@ -50,12 +50,12 @@ router.post('/', async (req, res) => {
       }
     } else if (create_account) {
       // Auto-create account
-      const bcrypt = require('bcryptjs');
+      const { hashPassword } = require('../utils/crypto');
       const jwt = require('jsonwebtoken');
       const { JWT_SECRET } = require('../middleware/auth');
       
       tempPassword = password || `BT-${Math.floor(100000 + Math.random() * 900000)}`;
-      const hash = bcrypt.hashSync(tempPassword, 10);
+      const hash = hashPassword(tempPassword);
       
       const userResult = await db.prepare(
         'INSERT INTO users (name, email, password_hash, phone, nationality, role, sub_role) VALUES (?, ?, ?, ?, ?, ?, ?)'
@@ -311,9 +311,9 @@ router.post('/:id/convert', authenticate, adminOnly, async (req, res) => {
         userId = user.id;
       } else {
         // Create customer account
-        const bcrypt = require('bcryptjs');
+        const { hashPassword } = require('../utils/crypto');
         const tempPassword = 'welcome' + Math.floor(1000 + Math.random() * 9000);
-        const hash = bcrypt.hashSync(tempPassword, 10);
+        const hash = hashPassword(tempPassword);
         const userInsert = await db.prepare(`
           INSERT INTO users (name, email, password_hash, phone, role, status)
           VALUES (?, ?, ?, ?, 'customer', 'active')
