@@ -152,7 +152,8 @@ export default function HomePage() {
                       src={`https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&mute=1&loop=1&playlist=${ytMatch[1]}&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1`}
                       title="Hero background video"
                       className="hero-bg-video"
-                      style={{ objectFit: 'cover', border: 'none' }}
+                      style={{ objectFit: 'cover', border: 'none', pointerEvents: 'none' }}
+                      tabIndex="-1"
                       allow="autoplay; encrypted-media"
                       allowFullScreen
                     />
@@ -164,7 +165,8 @@ export default function HomePage() {
                       src={`https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1&muted=1&loop=1&background=1&controls=0`}
                       title="Hero background video"
                       className="hero-bg-video"
-                      style={{ objectFit: 'cover', border: 'none' }}
+                      style={{ objectFit: 'cover', border: 'none', pointerEvents: 'none' }}
+                      tabIndex="-1"
                       allow="autoplay; encrypted-media"
                       allowFullScreen
                     />
@@ -628,7 +630,7 @@ export default function HomePage() {
           height: 100%;
           object-fit: cover;
           z-index: 2;
-          pointer-events: none;
+          pointer-events: none !important;
           opacity: 0;
           animation: fadeInVideo 1.2s ease-in-out forwards;
           animation-delay: 1.5s;
@@ -644,6 +646,7 @@ export default function HomePage() {
           top: 50%;
           left: 50%;
           transform: translate(-50%, -50%);
+          pointer-events: none !important;
         }
 
         .hero-overlay {
