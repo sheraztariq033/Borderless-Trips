@@ -6,6 +6,7 @@ Borderless Trips is a premium travel agency based in London, UK, specializing in
 - **Schengen Visa Consultation**: Guided process, document verification checklist, application form review, and interview coaching.
 - **Holiday Packages**: Specially curated vacation packages to premier European destinations (Paris, Rome, Barcelona, Santorini, Amsterdam, Zurich, etc.).
 - **Flight Bookings**: Reservation generation and verified itineraries.
+- **Global Cruise Packages**: Luxury cruise bookings (Mediterranean, Caribbean, Alaska, European River cruises) with onboard accommodations and shore excursions.
 
 ## Core Navigation Routes
 - [Home Page](https://borderlesstrips.com/) - Main entry point, services outline, testimonials, and visa eligibility quiz.
@@ -13,6 +14,7 @@ Borderless Trips is a premium travel agency based in London, UK, specializing in
 - [Schengen Visa Services](https://borderlesstrips.com/visa-services) - Comprehensive information on Schengen visas and eligibility guidelines.
 - [Holiday Packages](https://borderlesstrips.com/holiday-packages) - Curated vacation package selection list.
 - [Flight Bookings](https://borderlesstrips.com/flights) - Flight booking inquiry search system.
+- [Cruise Packages](https://borderlesstrips.com/cruises) - Premium ocean and river cruise packages and inquiry bookings.
 - [Travel Blog](https://borderlesstrips.com/blog) - Travel guide resources, visa checklists, and budget advice.
 - [Frequently Asked Questions (FAQ)](https://borderlesstrips.com/faq) - Help section answering common travel and visa questions.
 - [Contact Support](https://borderlesstrips.com/contact) - Contact form, address, phone numbers, and office locations.

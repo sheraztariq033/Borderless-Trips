@@ -97,6 +97,7 @@ export default function Footer() {
                 <Link to="/visa-services">Schengen Visa Services</Link>
                 <Link to="/holiday-packages">Holiday Packages</Link>
                 <Link to="/flights">Flight Bookings</Link>
+                <Link to="/cruises">Cruise Packages</Link>
                 <Link to="/visa-services#eligibility">Visa Eligibility Check</Link>
                 <Link to="/holiday-packages?type=honeymoon">Honeymoon Packages</Link>
                 <Link to="/holiday-packages?type=family">Family Holidays</Link>

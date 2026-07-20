@@ -12,6 +12,7 @@ const navLinks = [
       { path: '/visa-services', label: 'Schengen Visa Services' },
       { path: '/holiday-packages', label: 'Holiday Packages' },
       { path: '/flights', label: 'Flights' },
+      { path: '/cruises', label: 'Cruises' },
     ]
   },
   { path: '/about', label: 'About' },

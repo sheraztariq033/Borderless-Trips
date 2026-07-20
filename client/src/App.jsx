@@ -29,6 +29,7 @@ const RefundPage = lazy(() => import('./pages/RefundPage'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
 const TrackPage = lazy(() => import('./pages/TrackPage'));
+const CruisesPage = lazy(() => import('./pages/CruisesPage'));
 
 // Auth pages
 const AuthPagesImport = () => import('./pages/AuthPages');
@@ -87,6 +88,7 @@ function AppLayout() {
             <Route path="/holiday-packages" element={<HolidayPackagesPage />} />
             <Route path="/holiday-packages/:id" element={<PackageDetailPage />} />
             <Route path="/flights" element={<FlightsPage />} />
+            <Route path="/cruises" element={<CruisesPage />} />
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/faq" element={<FAQPage />} />
             <Route path="/blog" element={<BlogPage />} />
