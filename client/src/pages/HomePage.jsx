@@ -1152,6 +1152,7 @@ export default function HomePage() {
 
         /* ===== RESPONSIVE ===== */
         @media (max-width: 1024px) {
+          .hero-bg-video { display: none !important; }
           .services-grid, .steps-grid { grid-template-columns: repeat(2, 1fr); }
           .visa-cta-inner { grid-template-columns: 1fr; }
           .destinations-grid { grid-template-columns: repeat(2, 1fr); }
