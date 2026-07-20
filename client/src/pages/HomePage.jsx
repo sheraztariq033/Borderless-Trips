@@ -799,7 +799,7 @@ export default function HomePage() {
 
         .stat-label {
           font-size: var(--text-sm);
-          color: var(--color-text-muted);
+          color: #475569;
           font-weight: 500;
         }
 
@@ -1063,7 +1063,7 @@ export default function HomePage() {
 
         .testimonial-location {
           font-size: var(--text-sm);
-          color: var(--color-text-muted);
+          color: #475569;
         }
 
         .testimonial-nav {
@@ -1109,6 +1109,16 @@ export default function HomePage() {
           border: none;
           cursor: pointer;
           transition: all var(--transition-fast);
+          position: relative;
+        }
+
+        .testimonial-dot::before {
+          content: '';
+          position: absolute;
+          top: -16px;
+          left: -16px;
+          right: -16px;
+          bottom: -16px;
         }
 
         .testimonial-dot.active {

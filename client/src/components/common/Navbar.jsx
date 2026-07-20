@@ -247,8 +247,8 @@ export default function Navbar() {
         }
 
         .navbar-logo-img {
-          width: 48px;
-          height: 48px;
+          width: auto;
+          height: 40px;
           object-fit: contain;
           border-radius: var(--radius-md);
         }
@@ -461,8 +461,8 @@ export default function Navbar() {
 
         @media (max-width: 768px) {
           .navbar-logo-img {
-            width: 38px;
-            height: 38px;
+            width: auto;
+            height: 32px;
           }
           .navbar-brand {
             font-size: var(--text-base);

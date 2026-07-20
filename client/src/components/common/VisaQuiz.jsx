@@ -540,7 +540,7 @@ export default function VisaQuiz({ inline = false, onClose = null }) {
             {/* STEP 1: Destination */}
             {step === 1 && (
               <div>
-                <h4 className="quiz-title">Where is your dream destination? ✈️</h4>
+                <h3 className="quiz-title">Where is your dream destination? ✈️</h3>
                 <p className="quiz-desc">Select your primary Schengen travel country. We'll load matching checklist templates.</p>
                 
                 <div className="option-grid-3">
@@ -602,7 +602,7 @@ export default function VisaQuiz({ inline = false, onClose = null }) {
             {/* STEP 2: Nationality */}
             {step === 2 && (
               <div>
-                <h4 className="quiz-title">Which passport do you hold? 🛂</h4>
+                <h3 className="quiz-title">Which passport do you hold? 🛂</h3>
                 <p className="quiz-desc">Required document templates and checklists vary significantly based on your passport.</p>
 
                 <div className="option-grid-5">
@@ -638,7 +638,7 @@ export default function VisaQuiz({ inline = false, onClose = null }) {
             {/* STEP 3: Purpose */}
             {step === 3 && (
               <div>
-                <h4 className="quiz-title">What is the purpose of your trip? 🏖️</h4>
+                <h3 className="quiz-title">What is the purpose of your trip? 🏖️</h3>
                 <p className="quiz-desc">We tailor checklists based on whether you are exploring, studying, or doing business.</p>
 
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -677,7 +677,7 @@ export default function VisaQuiz({ inline = false, onClose = null }) {
             {/* STEP 4: Employment */}
             {step === 4 && (
               <div>
-                <h4 className="quiz-title">What is your current occupation? 👔</h4>
+                <h3 className="quiz-title">What is your current occupation? 👔</h3>
                 <p className="quiz-desc">Confirming ties to your home country is critical to proving your return intention.</p>
 
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -716,7 +716,7 @@ export default function VisaQuiz({ inline = false, onClose = null }) {
             {/* STEP 5: Funds */}
             {step === 5 && (
               <div>
-                <h4 className="quiz-title">Can you show personal bank statements? 💰</h4>
+                <h3 className="quiz-title">Can you show personal bank statements? 💰</h3>
                 <p className="quiz-desc">Select how you plan to cover your expenses during your Schengen stay.</p>
 
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -759,7 +759,7 @@ export default function VisaQuiz({ inline = false, onClose = null }) {
             {/* STEP 6: History */}
             {step === 6 && (
               <div>
-                <h4 className="quiz-title">Have you held a Schengen visa before? 🇪🇺</h4>
+                <h3 className="quiz-title">Have you held a Schengen visa before? 🇪🇺</h3>
                 <p className="quiz-desc">Previous Schengen travel history heavily reinforces your application profile.</p>
 
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -802,7 +802,7 @@ export default function VisaQuiz({ inline = false, onClose = null }) {
             {/* STEP 7: Rejections */}
             {step === 7 && (
               <div>
-                <h4 className="quiz-title">Have you had visa rejections? ⚠️</h4>
+                <h3 className="quiz-title">Have you had visa rejections? ⚠️</h3>
                 <p className="quiz-desc">Declaring previous rejections is mandatory. We structure letters to mitigate refusal history.</p>
 
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -845,7 +845,7 @@ export default function VisaQuiz({ inline = false, onClose = null }) {
             {/* STEP 8: Contact Info */}
             {step === 8 && (
               <div>
-                <h4 className="quiz-title">Unlock Your Eligibility Score 🚀</h4>
+                <h3 className="quiz-title">Unlock Your Eligibility Score 🚀</h3>
                 <p className="quiz-desc">Provide your contact info to calculate your rating and register your free Client Portal checklist workspace.</p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

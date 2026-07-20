@@ -64,7 +64,7 @@ export default function Footer() {
             {/* Brand */}
             <div className="footer-col footer-brand-col">
               <Link to="/" className="footer-logo">
-                <img src={settings.logo_url || "/logo.svg"} alt={settings.business_name || "Borderless Trips"} style={{ width: 50, height: 50, borderRadius: 8 }} />
+                <img src={settings.logo_url || "/logo.svg"} alt={settings.business_name || "Borderless Trips"} style={{ height: 40, width: 'auto', borderRadius: 8, objectFit: 'contain' }} />
                 <div>
                   <div className="footer-brand-name">{settings.business_name || "Borderless Trips"}</div>
                   <div className="footer-brand-tag">Unlimited Journeys, Endless Discoveries</div>
@@ -347,7 +347,7 @@ export default function Footer() {
           align-items: center;
           justify-content: space-between;
           font-size: var(--text-sm);
-          color: rgba(255,255,255,0.4);
+          color: rgba(255,255,255,0.7);
         }
 
         .footer-legal {
@@ -356,7 +356,7 @@ export default function Footer() {
         }
 
         .footer-legal a {
-          color: rgba(255,255,255,0.4);
+          color: rgba(255,255,255,0.7);
           text-decoration: none;
         }
 

@@ -1,0 +1,24 @@
+# Borderless Trips
+
+Borderless Trips is a premium travel agency based in London, UK, specializing in Schengen visa services, luxury holiday packages, and personalized travel bookings (flights, hotels, and custom travel planning). It features a 95%+ visa approval success rate.
+
+## Main Services
+- **Schengen Visa Consultation**: Guided process, document verification checklist, application form review, and interview coaching.
+- **Holiday Packages**: Specially curated vacation packages to premier European destinations (Paris, Rome, Barcelona, Santorini, Amsterdam, Zurich, etc.).
+- **Flight Bookings**: Reservation generation and verified itineraries.
+
+## Core Navigation Routes
+- [Home Page](https://borderlesstrips.com/) - Main entry point, services outline, testimonials, and visa eligibility quiz.
+- [About Us](https://borderlesstrips.com/about) - Agency background, vision, and core mission.
+- [Schengen Visa Services](https://borderlesstrips.com/visa-services) - Comprehensive information on Schengen visas and eligibility guidelines.
+- [Holiday Packages](https://borderlesstrips.com/holiday-packages) - Curated vacation package selection list.
+- [Flight Bookings](https://borderlesstrips.com/flights) - Flight booking inquiry search system.
+- [Travel Blog](https://borderlesstrips.com/blog) - Travel guide resources, visa checklists, and budget advice.
+- [Frequently Asked Questions (FAQ)](https://borderlesstrips.com/faq) - Help section answering common travel and visa questions.
+- [Contact Support](https://borderlesstrips.com/contact) - Contact form, address, phone numbers, and office locations.
+- [Track Visa Application](https://borderlesstrips.com/track) - Live tracking interface for visa applications.
+
+## Useful Resources
+- [Privacy Policy](https://borderlesstrips.com/privacy-policy)
+- [Terms of Service](https://borderlesstrips.com/terms-of-service)
+- [Refund Policy](https://borderlesstrips.com/refund-policy)

@@ -25,7 +25,7 @@ export default function WhatsAppWidget() {
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: -20, scale: 0.9 }}
           >
-            <button className="whatsapp-tooltip-close" onClick={() => setShowTooltip(false)}>
+            <button className="whatsapp-tooltip-close" onClick={() => setShowTooltip(false)} aria-label="Close tooltip">
               <X size={12} />
             </button>
             <p>Need help? Chat with us on WhatsApp!</p>
