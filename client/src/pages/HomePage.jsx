@@ -132,51 +132,61 @@ export default function HomePage() {
                 className={`hero-bg-img ${idx === currentHeroImage ? 'active' : ''}`}
               />
             ))
-          ) : (() => {
-            // Detect YouTube URLs
-            const ytMatch = heroVideo.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
-            // Detect Vimeo URLs
-            const vimeoMatch = heroVideo.match(/vimeo\.com\/(?:video\/)?(\d+)/);
-
-            if (ytMatch) {
-              return (
-                <iframe
-                  src={`https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&mute=1&loop=1&playlist=${ytMatch[1]}&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1`}
-                  title="Hero background video"
-                  className="hero-bg-video"
-                  style={{ objectFit: 'cover', border: 'none' }}
-                  allow="autoplay; encrypted-media"
-                  allowFullScreen
-                />
-              );
-            }
-            if (vimeoMatch) {
-              return (
-                <iframe
-                  src={`https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1&muted=1&loop=1&background=1&controls=0`}
-                  title="Hero background video"
-                  className="hero-bg-video"
-                  style={{ objectFit: 'cover', border: 'none' }}
-                  allow="autoplay; encrypted-media"
-                  allowFullScreen
-                />
-              );
-            }
-            // Direct video file (mp4, webm, etc.)
-            return (
-              <video
-                src={heroVideo}
-                autoPlay
-                loop
-                muted
-                playsInline
-                preload="auto"
-                poster="https://images.unsplash.com/photo-1506012787146-f92b2d7d6d96?q=80&w=1600"
-                className="hero-bg-video"
-                style={{ objectFit: 'cover' }}
+          ) : (
+            <>
+              {/* Fallback static poster image visible behind the video during load */}
+              <img
+                src={heroImages[0]}
+                alt=""
+                className="hero-bg-img active"
               />
-            );
-          })()}
+              {(() => {
+                // Detect YouTube URLs
+                const ytMatch = heroVideo.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
+                // Detect Vimeo URLs
+                const vimeoMatch = heroVideo.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+
+                if (ytMatch) {
+                  return (
+                    <iframe
+                      src={`https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&mute=1&loop=1&playlist=${ytMatch[1]}&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1`}
+                      title="Hero background video"
+                      className="hero-bg-video"
+                      style={{ objectFit: 'cover', border: 'none' }}
+                      allow="autoplay; encrypted-media"
+                      allowFullScreen
+                    />
+                  );
+                }
+                if (vimeoMatch) {
+                  return (
+                    <iframe
+                      src={`https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1&muted=1&loop=1&background=1&controls=0`}
+                      title="Hero background video"
+                      className="hero-bg-video"
+                      style={{ objectFit: 'cover', border: 'none' }}
+                      allow="autoplay; encrypted-media"
+                      allowFullScreen
+                    />
+                  );
+                }
+                // Direct video file (mp4, webm, etc.)
+                return (
+                  <video
+                    src={heroVideo}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    preload="auto"
+                    poster="https://images.unsplash.com/photo-1506012787146-f92b2d7d6d96?q=80&w=1600"
+                    className="hero-bg-video"
+                    style={{ objectFit: 'cover' }}
+                  />
+                );
+              })()}
+            </>
+          )}
           <div className="hero-overlay" />
         </div>
         <div className="container hero-content">
@@ -606,14 +616,22 @@ export default function HomePage() {
           z-index: 1;
         }
 
+        @keyframes fadeInVideo {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
         .hero-bg-video {
           position: absolute;
           inset: 0;
           width: 100%;
           height: 100%;
           object-fit: cover;
-          z-index: 1;
+          z-index: 2;
           pointer-events: none;
+          opacity: 0;
+          animation: fadeInVideo 1.2s ease-in-out forwards;
+          animation-delay: 1.5s;
         }
 
         /* Iframes (YouTube/Vimeo) can't use object-fit, so we scale them up to cover */
@@ -632,7 +650,7 @@ export default function HomePage() {
           position: absolute;
           inset: 0;
           background: linear-gradient(135deg, rgba(11,29,53,0.92) 0%, rgba(11,29,53,0.75) 50%, rgba(14,165,233,0.4) 100%);
-          z-index: 2;
+          z-index: 3;
         }
 
         .hero-bg-switcher {
